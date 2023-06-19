@@ -86,7 +86,7 @@ where
         if let Known(state) = state {
             return state;
         } else {
-            unreachable!()
+            return NotMonotonic;
         }
     }
 
@@ -173,6 +173,31 @@ mod test {
     #[test]
     fn test_not_monotonic_i32() {
         let data: Array1<i32> = array![1, 2, 3, 2, 4, 5];
+        test_monotonic!(data, Monotonic::NotMonotonic);
+    }
+
+    #[test]
+    fn test_ordered_view_on_unordred_array() {
+        let data: Array1<i32> = array![5, 4, 3, 2, 1];
+        let ordered = data.slice(s![..;-1]);
+        test_monotonic!(ordered, Monotonic::Rising { strict: true });
+    }
+
+    #[test]
+    fn test_starting_flat() {
+        let data: Array1<i32> = array![1, 1, 2, 3, 4, 5];
+        test_monotonic!(data, Monotonic::Rising { strict: false });
+    }
+
+    #[test]
+    fn test_flat() {
+        let data: Array1<i32> = array![1, 1, 1];
+        test_monotonic!(data, Monotonic::NotMonotonic);
+    }
+
+    #[test]
+    fn test_one_element_array() {
+        let data: Array1<i32> = array![1];
         test_monotonic!(data, Monotonic::NotMonotonic);
     }
 }
