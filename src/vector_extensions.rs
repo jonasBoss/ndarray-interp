@@ -13,15 +13,77 @@ pub trait VectorExtensions {
 }
 
 /// Describes the monotonic property of a vector
+#[derive(Debug)]
 pub enum Monotonic {
     Rising { strict: bool },
     Falling { strict: bool },
     NotMonotonic,
 }
+use Monotonic::*;
 
 impl<T: PartialOrd + Sub<Output = T>> VectorExtensions for Array1<T> {
     fn monotonic_prop(&self) -> Monotonic {
-        todo!()
+        if self.len() <= 1 {
+            return NotMonotonic;
+        };
+
+        #[derive(Debug)]
+        enum State {
+            Init,
+            NotStrict,
+            Known(Monotonic),
+        }
+        use State::*;
+
+        let state = self
+            .windows(2)
+            .into_iter()
+            .try_fold(State::Init, |state, items| {
+                let a = items.get(0).unwrap_or_else(|| unreachable!());
+                let b = items.get(1).unwrap_or_else(|| unreachable!());
+                match state {
+                    Init => {
+                        if a < b {
+                            return Ok(Known(Rising { strict: true }));
+                        } else if a == b {
+                            return Ok(NotStrict);
+                        }
+                        Ok(Known(Falling { strict: true }))
+                    }
+                    NotStrict => {
+                        if a < b {
+                            return Ok(Known(Rising { strict: false }));
+                        } else if a == b {
+                            return Ok(NotStrict);
+                        }
+                        Ok(Known(Falling { strict: false }))
+                    }
+                    Known(Rising { strict }) => {
+                        if a == b {
+                            return Ok(Known(Rising { strict: false }));
+                        } else if a < b {
+                            return Ok(Known(Rising { strict }));
+                        }
+                        Err(NotMonotonic)
+                    }
+                    Known(Falling { strict }) => {
+                        if a == b {
+                            return Ok(Known(Falling { strict: false }));
+                        } else if a > b {
+                            return Ok(Known(Falling { strict }));
+                        }
+                        Err(NotMonotonic)
+                    }
+                    Known(NotMonotonic) => unreachable!(),
+                }
+            })
+            .unwrap_or(Known(NotMonotonic));
+
+        if let Known(state) = state {
+            return state;
+        } else {
+            unreachable!()
+        }
     }
 
     fn is_linspaced(&self) -> bool {
@@ -49,7 +111,7 @@ mod test {
         ($d:ident, $expected:pat) => {
             match $d.monotonic_prop() {
                 $expected => (),
-                _ => panic!(),
+                value => panic!("{}", format!("got {value:?}")),
             };
             match $d.slice(s![..;1]).monotonic_prop() {
                 $expected => (),
