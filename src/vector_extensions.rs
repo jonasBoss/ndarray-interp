@@ -1,6 +1,6 @@
 use std::ops::Sub;
 
-use ndarray::{Array1, ArrayView1};
+use ndarray::{ArrayBase, Data, Ix1, RawData};
 
 ///! This module contains the vector extensions trait
 
@@ -21,7 +21,11 @@ pub enum Monotonic {
 }
 use Monotonic::*;
 
-impl<T: PartialOrd + Sub<Output = T>> VectorExtensions for Array1<T> {
+impl<S, T> VectorExtensions for ArrayBase<S, Ix1>
+where
+    S: RawData<Elem = T> + Data,
+    T: PartialOrd + Sub<Output = T>,
+{
     fn monotonic_prop(&self) -> Monotonic {
         if self.len() <= 1 {
             return NotMonotonic;
@@ -38,7 +42,7 @@ impl<T: PartialOrd + Sub<Output = T>> VectorExtensions for Array1<T> {
         let state = self
             .windows(2)
             .into_iter()
-            .try_fold(State::Init, |state, items| {
+            .try_fold(Init, |state, items| {
                 let a = items.get(0).unwrap_or_else(|| unreachable!());
                 let b = items.get(1).unwrap_or_else(|| unreachable!());
                 match state {
@@ -84,16 +88,6 @@ impl<T: PartialOrd + Sub<Output = T>> VectorExtensions for Array1<T> {
         } else {
             unreachable!()
         }
-    }
-
-    fn is_linspaced(&self) -> bool {
-        todo!()
-    }
-}
-
-impl<T: PartialOrd + Sub<Output = T>> VectorExtensions for ArrayView1<'_, T> {
-    fn monotonic_prop(&self) -> Monotonic {
-        todo!()
     }
 
     fn is_linspaced(&self) -> bool {
