@@ -1,7 +1,5 @@
-use std::ops::{Index, Sub};
-
 use ndarray::{Array, ArrayBase, Data, Ix1, RawData};
-use num_traits::{Float, Num, NumCast, PrimInt, ToPrimitive};
+use num_traits::{Float, NumCast, ToPrimitive};
 
 #[derive(Debug)]
 pub enum InterpolationStrategy {
@@ -31,7 +29,7 @@ where
         }
     }
 
-    pub fn interp_array<Dim>(&self, x: ArrayBase<S, Dim>) -> Array<T, Dim> {
+    pub fn interp_array<Dim>(&self, _x: ArrayBase<S, Dim>) -> Array<T, Dim> {
         todo!()
     }
 

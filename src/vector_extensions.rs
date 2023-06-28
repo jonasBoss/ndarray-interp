@@ -84,9 +84,9 @@ where
             .unwrap_or(Known(NotMonotonic));
 
         if let Known(state) = state {
-            return state;
+            state
         } else {
-            return NotMonotonic;
+            NotMonotonic
         }
     }
 
