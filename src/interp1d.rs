@@ -8,7 +8,7 @@ use crate::vector_extensions::{Monotonic, VectorExtensions};
 
 #[derive(Debug)]
 pub enum InterpolationStrategy {
-    Linear,
+    Linear { extrapolate: bool },
 }
 use InterpolationStrategy::*;
 
@@ -47,7 +47,7 @@ where
         Interp1DBuilder {
             x: None,
             y,
-            strategy: Linear,
+            strategy: Linear { extrapolate: false },
         }
     }
     pub fn x(mut self, x: ArrayBase<S, Ix1>) -> Self {
@@ -59,8 +59,8 @@ where
         self
     }
     pub fn build(self) -> Result<Interp1D<S, T>, BuilderError> {
-        match self.strategy {
-            Linear => {
+        match &self.strategy {
+            Linear { .. } => {
                 if self.y.len() < 2 {
                     Err(BuilderError::NotEnoughData(
                         "Linear Interpolation needs at least two data points".into(),
@@ -137,8 +137,8 @@ where
 {
     /// Interpolated value at x
     pub fn interp(&self, x: T) -> Result<T, InterpolateError> {
-        match self.strategy {
-            Linear => self.linear(x),
+        match &self.strategy {
+            Linear { .. } => self.linear(x),
         }
     }
 
@@ -157,7 +157,9 @@ where
     }
 
     fn linear(&self, x: T) -> Result<T, InterpolateError> {
-        if !(self.range.0 <= x && x <= self.range.1) {
+        if matches!(self.strategy, Linear { extrapolate: false })
+            && !(self.range.0 <= x && x <= self.range.1)
+        {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:#?} is not in range of {:#?}",
                 self.range
@@ -217,11 +219,11 @@ where
 mod test {
     use ndarray::array;
 
-    use crate::BuilderError;
-    use crate::InterpolateError;
     use super::Interp1D;
     use super::Interp1DBuilder;
     use super::InterpolationStrategy::*;
+    use crate::BuilderError;
+    use crate::InterpolateError;
 
     #[test]
     fn interp_y_only() {
@@ -239,7 +241,7 @@ mod test {
     fn interp_with_x_and_y() {
         let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
-            .strategy(Linear)
+            .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
         assert_eq!(interp.interp(-4.0).unwrap(), 1.0);
@@ -272,7 +274,7 @@ mod test {
     fn interp_with_x_and_y_out_of_bounds(){
         let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0])
             .x(array![-4.0, -3.0, 2.0])
-            .strategy(Linear)
+            .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
         assert!(matches!(interp.interp(-4.1), Err(InterpolateError::OutOfBounds(_))));
