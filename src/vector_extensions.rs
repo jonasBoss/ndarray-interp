@@ -7,9 +7,6 @@ use ndarray::{ArrayBase, Data, Ix1, RawData};
 pub trait VectorExtensions {
     /// get the monotonic property of the vector
     fn monotonic_prop(&self) -> Monotonic;
-
-    /// are the values liearly spaced
-    fn is_linspaced(&self) -> bool;
 }
 
 /// Describes the monotonic property of a vector
@@ -88,10 +85,6 @@ where
         } else {
             NotMonotonic
         }
-    }
-
-    fn is_linspaced(&self) -> bool {
-        todo!()
     }
 }
 
