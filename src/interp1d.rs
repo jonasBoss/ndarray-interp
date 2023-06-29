@@ -25,7 +25,7 @@ pub enum BuilderError {
 #[derive(Debug, Error)]
 pub enum InterpolateError {
     #[error("{0}")]
-    OutOfBounds(String)
+    OutOfBounds(String),
 }
 
 #[derive(Debug)]
@@ -94,8 +94,8 @@ where
                 x.last().unwrap_or_else(|| unreachable!()).clone(),
             ),
             None => (
-                NumCast::from(0).unwrap_or_else(||unimplemented!()), 
-                NumCast::from(self.y.len() - 1).unwrap_or_else(||unimplemented!())
+                NumCast::from(0).unwrap_or_else(|| unimplemented!()),
+                NumCast::from(self.y.len() - 1).unwrap_or_else(|| unimplemented!()),
             ),
         };
         Ok(Interp1D {
@@ -143,7 +143,7 @@ where
     }
 
     /// Interpolate values at xs
-    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Result<Array<T, D>,InterpolateError>
+    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Result<Array<T, D>, InterpolateError>
     where
         D: Dimension,
         <D as Dimension>::Pattern: NdIndex<D>,
@@ -157,15 +157,18 @@ where
     }
 
     fn linear(&self, x: T) -> Result<T, InterpolateError> {
-        if !(self.range.0 <= x && x <= self.range.1){
-            return Err(InterpolateError::OutOfBounds(format!("x = {x:#?} is not in range of {:#?}", self.range)));
+        if !(self.range.0 <= x && x <= self.range.1) {
+            return Err(InterpolateError::OutOfBounds(format!(
+                "x = {x:#?} is not in range of {:#?}",
+                self.range
+            )));
         }
         let idx = self.get_left_index(x);
         let (x1, y1) = self.get_point(idx);
         let (x2, y2) = self.get_point(idx + 1);
         let m = (y2 - y1) / (x2 - x1);
         let b = y1 - m * x1;
-        Ok( m * x + b)
+        Ok(m * x + b)
     }
 
     /// get x,y coordinate at given index
