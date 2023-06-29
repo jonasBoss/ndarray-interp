@@ -1,6 +1,8 @@
 mod interp1d;
 mod vector_extensions;
 
+pub use interp1d::*;
+
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
