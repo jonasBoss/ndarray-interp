@@ -164,8 +164,8 @@ where
     fn get_left_index(&self, x: T) -> usize {
         if let Some(xs) = &self.x {
             // do bisection
-            let mut range = (0usize, xs.len());
-            while range.0 < range.1 + 1 {
+            let mut range = (0usize, xs.len() - 1);
+            while range.0 + 1 < range.1 {
                 let mid_idx = (range.1 - range.0) / 2 + range.0;
                 let mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
                 if mid_x == x {
@@ -192,15 +192,14 @@ mod test {
     use ndarray::array;
 
     use super::Interp1D;
+    use super::Interp1DBuilder;
     use super::InterpolationStrategy::*;
 
     #[test]
     fn interp_y_only() {
-        let interp = Interp1D {
-            x: None,
-            y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-            strategy: Linear,
-        };
+        let interp = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+            .build()
+            .unwrap();
         assert_eq!(interp.interp(0.0), 1.0);
         assert_eq!(interp.interp(9.0), 1.0);
         assert_eq!(interp.interp(4.5), 5.0);
@@ -209,14 +208,26 @@ mod test {
     }
 
     #[test]
+    fn interp_with_x_and_y() {
+        let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+            .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+            .strategy(Linear)
+            .build()
+            .unwrap();
+        assert_eq!(interp.interp(-4.0), 1.0);
+        assert_eq!(interp.interp(5.0), 1.0);
+        assert_eq!(interp.interp(0.0), 5.0);
+        assert_eq!(interp.interp(-3.5), 1.5);
+        assert_eq!(interp.interp(4.75), 1.25);
+    }
+
+    #[test]
     fn interp_array() {
-        let interp = Interp1D {
-            x: None,
-            y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-            strategy: Linear,
-        };
-        let xs = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
+        let interp = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+            .build()
+            .unwrap();
+        let x_query = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
         let y_expect = array![[2.0, 3.0, 1.0], [5.0, 5.0, 2.5]];
-        assert_eq!(interp.interp_array(&xs), y_expect);
+        assert_eq!(interp.interp_array(&x_query), y_expect);
     }
 }
