@@ -262,48 +262,52 @@ mod test {
     }
 
     #[test]
-    fn interp_y_only_out_of_bounds(){
-        let interp = Interp1D::builder(array![1.0, 2.0, 3.0])
-            .build()
-            .unwrap();
-        assert!(matches!(interp.interp(-0.1), Err(InterpolateError::OutOfBounds(_))));
-        assert!(matches!(interp.interp(9.0), Err(InterpolateError::OutOfBounds(_))));
+    fn interp_y_only_out_of_bounds() {
+        let interp = Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
+        assert!(matches!(
+            interp.interp(-0.1),
+            Err(InterpolateError::OutOfBounds(_))
+        ));
+        assert!(matches!(
+            interp.interp(9.0),
+            Err(InterpolateError::OutOfBounds(_))
+        ));
     }
 
     #[test]
-    fn interp_with_x_and_y_out_of_bounds(){
+    fn interp_with_x_and_y_out_of_bounds() {
         let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0])
             .x(array![-4.0, -3.0, 2.0])
             .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
-        assert!(matches!(interp.interp(-4.1), Err(InterpolateError::OutOfBounds(_))));
-        assert!(matches!(interp.interp(2.1), Err(InterpolateError::OutOfBounds(_))));
+        assert!(matches!(
+            interp.interp(-4.1),
+            Err(InterpolateError::OutOfBounds(_))
+        ));
+        assert!(matches!(
+            interp.interp(2.1),
+            Err(InterpolateError::OutOfBounds(_))
+        ));
     }
 
     #[test]
-    fn interp_builder_errors(){
-        assert!(
-            matches!(
-                Interp1DBuilder::new(array![1]).build(),
-                Err(BuilderError::NotEnoughData(_))
-            )
-        );
-        assert!(
-            matches!(
-                Interp1DBuilder::new(array![1,2])
-                 .x(array![1,2,3])
-                 .build(),
-                Err(BuilderError::AxisLenght(_))
-            )
-        );
-        assert!(
-            matches!(
-                Interp1DBuilder::new(array![1,2,3])
-                 .x(array![1,2,2])
-                 .build(),
-                Err(BuilderError::Monotonic(_))
-            )
-        );
+    fn interp_builder_errors() {
+        assert!(matches!(
+            Interp1DBuilder::new(array![1]).build(),
+            Err(BuilderError::NotEnoughData(_))
+        ));
+        assert!(matches!(
+            Interp1DBuilder::new(array![1, 2])
+                .x(array![1, 2, 3])
+                .build(),
+            Err(BuilderError::AxisLenght(_))
+        ));
+        assert!(matches!(
+            Interp1DBuilder::new(array![1, 2, 3])
+                .x(array![1, 2, 2])
+                .build(),
+            Err(BuilderError::Monotonic(_))
+        ));
     }
 }
