@@ -1,4 +1,4 @@
-use ndarray::{Array, ArrayBase, Data, Ix1, RawData};
+use ndarray::{Array, ArrayBase, Data, Ix1, RawData, Dimension, NdIndex};
 use num_traits::{Float, NumCast, ToPrimitive};
 
 #[derive(Debug)]
@@ -23,14 +23,27 @@ where
     S: RawData<Elem = T> + Data,
     T: Float,
 {
+    /// Interpolated value at x
     pub fn interp(&self, x: T) -> T {
         match self.strategy {
             InterpolationStrategy::Linear => self.linear(x),
         }
     }
 
-    pub fn interp_array<Dim>(&self, _x: ArrayBase<S, Dim>) -> Array<T, Dim> {
-        todo!()
+    /// Interpolate values at xs
+    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Array<T, D> 
+    where D: Dimension, <D as Dimension>::Pattern: NdIndex<D>
+    {
+        let mut ys = Array::zeros(xs.raw_dim());
+        xs.indexed_iter()
+            .fold(
+                ys, 
+                |mut ys, (idx, x)|{
+                    let y_ref = ys.get_mut(idx).unwrap_or_else(||unreachable!());
+                    *y_ref = self.interp(*x);
+                    ys
+                }
+            )
     }
 
     fn linear(&self, x: T) -> T {
@@ -103,5 +116,17 @@ mod test {
         assert_eq!(interp.interp(4.5), 5.0);
         assert_eq!(interp.interp(0.5), 1.5);
         assert_eq!(interp.interp(8.75), 1.25);
+    }
+
+    #[test]
+    fn interp_array(){
+        let interp = Interp1D {
+            x: None,
+            y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+            strategy: InterpolationStrategy::Linear,
+        };
+        let xs = array![[1.0,2.0,9.0],[4.0,5.0,7.5]];
+        let y_expect = array![[2.0, 3.0, 1.0],[5.0, 5.0, 2.5]];
+        assert_eq!(interp.interp_array(&xs), y_expect);
     }
 }
