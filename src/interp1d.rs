@@ -5,6 +5,8 @@ use num_traits::{Float, NumCast, ToPrimitive};
 pub enum InterpolationStrategy {
     Linear,
 }
+use InterpolationStrategy::*;
+
 
 #[derive(Debug)]
 pub struct Interp1D<S, T>
@@ -26,7 +28,7 @@ where
     /// Interpolated value at x
     pub fn interp(&self, x: T) -> T {
         match self.strategy {
-            InterpolationStrategy::Linear => self.linear(x),
+            Linear => self.linear(x),
         }
     }
 
@@ -34,7 +36,7 @@ where
     pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Array<T, D> 
     where D: Dimension, <D as Dimension>::Pattern: NdIndex<D>
     {
-        let mut ys = Array::zeros(xs.raw_dim());
+        let ys = Array::zeros(xs.raw_dim());
         xs.indexed_iter()
             .fold(
                 ys, 
@@ -102,14 +104,14 @@ mod test {
     use ndarray::array;
 
     use super::Interp1D;
-    use super::InterpolationStrategy;
+    use super::InterpolationStrategy::*;
 
     #[test]
     fn interp_y_only() {
         let interp = Interp1D {
             x: None,
             y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-            strategy: InterpolationStrategy::Linear,
+            strategy: Linear,
         };
         assert_eq!(interp.interp(0.0), 1.0);
         assert_eq!(interp.interp(9.0), 1.0);
@@ -123,7 +125,7 @@ mod test {
         let interp = Interp1D {
             x: None,
             y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-            strategy: InterpolationStrategy::Linear,
+            strategy: Linear,
         };
         let xs = array![[1.0,2.0,9.0],[4.0,5.0,7.5]];
         let y_expect = array![[2.0, 3.0, 1.0],[5.0, 5.0, 2.5]];
