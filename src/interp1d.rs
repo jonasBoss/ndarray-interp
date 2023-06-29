@@ -20,6 +20,12 @@ pub enum BuilderError {
     AxisLenght(String),
 }
 
+#[derive(Debug, Error)]
+pub enum InterpolateError {
+    #[error("{0}")]
+    OutOfBounds(String)
+}
+
 #[derive(Debug)]
 pub struct Interp1DBuilder<S, T>
 where
