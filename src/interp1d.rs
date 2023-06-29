@@ -207,9 +207,15 @@ where
             }
             range.0
         } else {
-            match x.ceil().to_usize().unwrap() {
-                0 => 0,     // avoid out of bounds left
-                x => x - 1, // avoid out of bounds right
+            match x.ceil().to_usize().unwrap_or(0) {
+                // on negative values get the first index, this is only relevant for extrapolation
+                0 => 0, // avoid out of bounds left
+                mut x => {
+                    if x > self.y.len() - 1 {
+                        x = self.y.len() - 1;
+                    }
+                    x - 1
+                } // avoid out of bounds right
             }
         }
     }
@@ -238,6 +244,16 @@ mod test {
     }
 
     #[test]
+    fn extrapolate_y_only() {
+        let interp = Interp1D::builder(array![1.0, 2.0, 1.5])
+            .strategy(Linear { extrapolate: true })
+            .build()
+            .unwrap();
+        assert_eq!(interp.interp(-1.0).unwrap(), 0.0);
+        assert_eq!(interp.interp(3.0).unwrap(), 1.0);
+    }
+
+    #[test]
     fn interp_with_x_and_y() {
         let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
@@ -249,6 +265,17 @@ mod test {
         assert_eq!(interp.interp(0.0).unwrap(), 5.0);
         assert_eq!(interp.interp(-3.5).unwrap(), 1.5);
         assert_eq!(interp.interp(4.75).unwrap(), 1.25);
+    }
+
+    #[test]
+    fn extrapolate_with_x_and_y() {
+        let interp = Interp1DBuilder::new(array![1.0, 0.0, 1.5])
+            .x(array![0.0, 1.0, 1.5])
+            .strategy(Linear { extrapolate: true })
+            .build()
+            .unwrap();
+        assert_eq!(interp.interp(-1.0).unwrap(), 2.0);
+        assert_eq!(interp.interp(2.0).unwrap(), 3.0);
     }
 
     #[test]
