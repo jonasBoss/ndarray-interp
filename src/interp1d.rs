@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex, RawData};
 use num_traits::{Float, Num, NumCast};
 use thiserror::Error;
@@ -131,36 +133,39 @@ where
 impl<S, T> Interp1D<S, T>
 where
     S: RawData<Elem = T> + Data,
-    T: Float,
+    T: Float + Debug,
 {
     /// Interpolated value at x
-    pub fn interp(&self, x: T) -> T {
+    pub fn interp(&self, x: T) -> Result<T, InterpolateError> {
         match self.strategy {
             Linear => self.linear(x),
         }
     }
 
     /// Interpolate values at xs
-    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Array<T, D>
+    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Result<Array<T, D>,InterpolateError>
     where
         D: Dimension,
         <D as Dimension>::Pattern: NdIndex<D>,
     {
         let ys = Array::zeros(xs.raw_dim());
-        xs.indexed_iter().fold(ys, |mut ys, (idx, x)| {
+        xs.indexed_iter().try_fold(ys, |mut ys, (idx, x)| {
             let y_ref = ys.get_mut(idx).unwrap_or_else(|| unreachable!());
-            *y_ref = self.interp(*x);
-            ys
+            *y_ref = self.interp(*x)?;
+            Ok(ys)
         })
     }
 
-    fn linear(&self, x: T) -> T {
+    fn linear(&self, x: T) -> Result<T, InterpolateError> {
+        if !(self.range.0 <= x && x <= self.range.1){
+            return Err(InterpolateError::OutOfBounds(format!("x = {x:#?} is not in range of {:#?}", self.range)));
+        }
         let idx = self.get_left_index(x);
         let (x1, y1) = self.get_point(idx);
         let (x2, y2) = self.get_point(idx + 1);
         let m = (y2 - y1) / (x2 - x1);
         let b = y1 - m * x1;
-        m * x + b
+        Ok( m * x + b)
     }
 
     /// get x,y coordinate at given index
@@ -218,11 +223,11 @@ mod test {
         let interp = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
             .build()
             .unwrap();
-        assert_eq!(interp.interp(0.0), 1.0);
-        assert_eq!(interp.interp(9.0), 1.0);
-        assert_eq!(interp.interp(4.5), 5.0);
-        assert_eq!(interp.interp(0.5), 1.5);
-        assert_eq!(interp.interp(8.75), 1.25);
+        assert_eq!(interp.interp(0.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(9.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(4.5).unwrap(), 5.0);
+        assert_eq!(interp.interp(0.5).unwrap(), 1.5);
+        assert_eq!(interp.interp(8.75).unwrap(), 1.25);
     }
 
     #[test]
@@ -232,11 +237,11 @@ mod test {
             .strategy(Linear)
             .build()
             .unwrap();
-        assert_eq!(interp.interp(-4.0), 1.0);
-        assert_eq!(interp.interp(5.0), 1.0);
-        assert_eq!(interp.interp(0.0), 5.0);
-        assert_eq!(interp.interp(-3.5), 1.5);
-        assert_eq!(interp.interp(4.75), 1.25);
+        assert_eq!(interp.interp(-4.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(5.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(0.0).unwrap(), 5.0);
+        assert_eq!(interp.interp(-3.5).unwrap(), 1.5);
+        assert_eq!(interp.interp(4.75).unwrap(), 1.25);
     }
 
     #[test]
@@ -246,6 +251,6 @@ mod test {
             .unwrap();
         let x_query = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
         let y_expect = array![[2.0, 3.0, 1.0], [5.0, 5.0, 2.5]];
-        assert_eq!(interp.interp_array(&x_query), y_expect);
+        assert_eq!(interp.interp_array(&x_query).unwrap(), y_expect);
     }
 }
