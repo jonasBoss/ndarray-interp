@@ -217,6 +217,7 @@ where
 mod test {
     use ndarray::array;
 
+    use crate::InterpolateError;
     use super::Interp1D;
     use super::Interp1DBuilder;
     use super::InterpolationStrategy::*;
@@ -255,5 +256,25 @@ mod test {
         let x_query = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
         let y_expect = array![[2.0, 3.0, 1.0], [5.0, 5.0, 2.5]];
         assert_eq!(interp.interp_array(&x_query).unwrap(), y_expect);
+    }
+
+    #[test]
+    fn interp_y_only_out_of_bounds(){
+        let interp = Interp1D::builder(array![1.0, 2.0, 3.0])
+            .build()
+            .unwrap();
+        assert!(matches!(interp.interp(-0.1), Err(InterpolateError::OutOfBounds(_))));
+        assert!(matches!(interp.interp(9.0), Err(InterpolateError::OutOfBounds(_))));
+    }
+
+    #[test]
+    fn interp_with_x_and_y_out_of_bounds(){
+        let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0])
+            .x(array![-4.0, -3.0, 2.0])
+            .strategy(Linear)
+            .build()
+            .unwrap();
+        assert!(matches!(interp.interp(-4.1), Err(InterpolateError::OutOfBounds(_))));
+        assert!(matches!(interp.interp(2.1), Err(InterpolateError::OutOfBounds(_))));
     }
 }
