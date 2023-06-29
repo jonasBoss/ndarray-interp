@@ -1,5 +1,8 @@
-use ndarray::{Array, ArrayBase, Data, Ix1, RawData, Dimension, NdIndex};
-use num_traits::{Float, NumCast, ToPrimitive};
+use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex, RawData};
+use num_traits::{Float, Num, NumCast};
+use thiserror::Error;
+
+use crate::vector_extensions::{Monotonic, VectorExtensions};
 
 #[derive(Debug)]
 pub enum InterpolationStrategy {
@@ -7,6 +10,79 @@ pub enum InterpolationStrategy {
 }
 use InterpolationStrategy::*;
 
+#[derive(Debug, Error)]
+pub enum BuilderError {
+    #[error("{0}")]
+    NotEnoughData(String),
+    #[error("{0}")]
+    Monotonic(String),
+    #[error("{0}")]
+    AxisLenght(String),
+}
+
+#[derive(Debug)]
+pub struct Interp1DBuilder<S, T>
+where
+    S: RawData<Elem = T> + Data,
+    T: Num,
+{
+    x: Option<ArrayBase<S, Ix1>>,
+    y: ArrayBase<S, Ix1>,
+    strategy: InterpolationStrategy,
+}
+impl<S, T> Interp1DBuilder<S, T>
+where
+    S: RawData<Elem = T> + Data,
+    T: Num + PartialOrd,
+{
+    pub fn new(y: ArrayBase<S, Ix1>) -> Self {
+        Interp1DBuilder {
+            x: None,
+            y,
+            strategy: Linear,
+        }
+    }
+    pub fn x(mut self, x: ArrayBase<S, Ix1>) -> Self {
+        self.x = Some(x);
+        self
+    }
+    pub fn strategy(mut self, strategy: InterpolationStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+    pub fn build(self) -> Result<Interp1D<S, T>, BuilderError> {
+        match self.strategy {
+            Linear => {
+                if self.y.len() < 2 {
+                    Err(BuilderError::NotEnoughData(
+                        "Linear Interpolation needs at least two data points".into(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+        }?;
+
+        if let Some(x) = &self.x {
+            match x.monotonic_prop() {
+                Monotonic::Rising { strict: true } => Ok(()),
+                _ => Err(BuilderError::Monotonic(
+                    "Values in the x axis need to be strictly monotonic rising".into(),
+                )),
+            }?;
+            if self.y.len() != x.len() {
+                Err(BuilderError::AxisLenght(format!(
+                    "Lengths of x and y axis need to match. Got x: {:}, y: {:}",
+                    x.len(),
+                    self.y.len()
+                )))
+            } else {
+                Ok(())
+            }?;
+        }
+        Ok(Interp1D{x: self.x, y: self.y, strategy: self.strategy})
+    }
+}
 
 #[derive(Debug)]
 pub struct Interp1D<S, T>
@@ -23,6 +99,16 @@ where
 impl<S, T> Interp1D<S, T>
 where
     S: RawData<Elem = T> + Data,
+    T: PartialOrd + Num,
+{
+    pub fn builder(y: ArrayBase<S, Ix1>) -> Interp1DBuilder<S, T> {
+        Interp1DBuilder::new(y)
+    }
+}
+
+impl<S, T> Interp1D<S, T>
+where
+    S: RawData<Elem = T> + Data,
     T: Float,
 {
     /// Interpolated value at x
@@ -33,19 +119,17 @@ where
     }
 
     /// Interpolate values at xs
-    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Array<T, D> 
-    where D: Dimension, <D as Dimension>::Pattern: NdIndex<D>
+    pub fn interp_array<D>(&self, xs: &ArrayBase<S, D>) -> Array<T, D>
+    where
+        D: Dimension,
+        <D as Dimension>::Pattern: NdIndex<D>,
     {
         let ys = Array::zeros(xs.raw_dim());
-        xs.indexed_iter()
-            .fold(
-                ys, 
-                |mut ys, (idx, x)|{
-                    let y_ref = ys.get_mut(idx).unwrap_or_else(||unreachable!());
-                    *y_ref = self.interp(*x);
-                    ys
-                }
-            )
+        xs.indexed_iter().fold(ys, |mut ys, (idx, x)| {
+            let y_ref = ys.get_mut(idx).unwrap_or_else(|| unreachable!());
+            *y_ref = self.interp(*x);
+            ys
+        })
     }
 
     fn linear(&self, x: T) -> T {
@@ -121,14 +205,14 @@ mod test {
     }
 
     #[test]
-    fn interp_array(){
+    fn interp_array() {
         let interp = Interp1D {
             x: None,
             y: array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0],
             strategy: Linear,
         };
-        let xs = array![[1.0,2.0,9.0],[4.0,5.0,7.5]];
-        let y_expect = array![[2.0, 3.0, 1.0],[5.0, 5.0, 2.5]];
+        let xs = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
+        let y_expect = array![[2.0, 3.0, 1.0], [5.0, 5.0, 2.5]];
         assert_eq!(interp.interp_array(&xs), y_expect);
     }
 }

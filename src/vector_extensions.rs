@@ -1,6 +1,5 @@
-use std::ops::Sub;
-
 use ndarray::{ArrayBase, Data, Ix1, RawData};
+use std::ops::Sub;
 
 ///! This module contains the vector extensions trait
 
@@ -21,7 +20,7 @@ use Monotonic::*;
 impl<S, T> VectorExtensions for ArrayBase<S, Ix1>
 where
     S: RawData<Elem = T> + Data,
-    T: PartialOrd + Sub<Output = T>,
+    T: PartialOrd,
 {
     fn monotonic_prop(&self) -> Monotonic {
         if self.len() <= 1 {
