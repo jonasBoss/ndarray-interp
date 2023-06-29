@@ -9,3 +9,6 @@ edition = "2021"
 ndarray = "0.15"
 num-traits = "0.2"
 thiserror = "1.0.40"
+
+[dev-dependencies]
+cargo-tarpaulin = "0.26.0"
