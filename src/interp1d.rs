@@ -217,6 +217,7 @@ where
 mod test {
     use ndarray::array;
 
+    use crate::BuilderError;
     use crate::InterpolateError;
     use super::Interp1D;
     use super::Interp1DBuilder;
@@ -276,5 +277,31 @@ mod test {
             .unwrap();
         assert!(matches!(interp.interp(-4.1), Err(InterpolateError::OutOfBounds(_))));
         assert!(matches!(interp.interp(2.1), Err(InterpolateError::OutOfBounds(_))));
+    }
+
+    #[test]
+    fn interp_builder_errors(){
+        assert!(
+            matches!(
+                Interp1DBuilder::new(array![1]).build(),
+                Err(BuilderError::NotEnoughData(_))
+            )
+        );
+        assert!(
+            matches!(
+                Interp1DBuilder::new(array![1,2])
+                 .x(array![1,2,3])
+                 .build(),
+                Err(BuilderError::AxisLenght(_))
+            )
+        );
+        assert!(
+            matches!(
+                Interp1DBuilder::new(array![1,2,3])
+                 .x(array![1,2,2])
+                 .build(),
+                Err(BuilderError::Monotonic(_))
+            )
+        );
     }
 }
