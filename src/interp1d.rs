@@ -33,7 +33,7 @@ where
 impl<S, T> Interp1DBuilder<S, T>
 where
     S: RawData<Elem = T> + Data,
-    T: Num + PartialOrd,
+    T: Num + PartialOrd + Clone + NumCast,
 {
     pub fn new(y: ArrayBase<S, Ix1>) -> Self {
         Interp1DBuilder {
@@ -80,10 +80,21 @@ where
                 Ok(())
             }?;
         }
+        let range = match &self.x {
+            Some(x) => (
+                x.first().unwrap_or_else(|| unreachable!()).clone(),
+                x.last().unwrap_or_else(|| unreachable!()).clone(),
+            ),
+            None => (
+                NumCast::from(0).unwrap_or_else(||unimplemented!()), 
+                NumCast::from(self.y.len() - 1).unwrap_or_else(||unimplemented!())
+            ),
+        };
         Ok(Interp1D {
             x: self.x,
             y: self.y,
             strategy: self.strategy,
+            range,
         })
     }
 }
@@ -98,12 +109,13 @@ where
     x: Option<ArrayBase<S, Ix1>>,
     y: ArrayBase<S, Ix1>,
     strategy: InterpolationStrategy,
+    range: (T, T),
 }
 
 impl<S, T> Interp1D<S, T>
 where
     S: RawData<Elem = T> + Data,
-    T: PartialOrd + Num,
+    T: PartialOrd + Num + Clone + NumCast,
 {
     pub fn builder(y: ArrayBase<S, Ix1>) -> Interp1DBuilder<S, T> {
         Interp1DBuilder::new(y)
