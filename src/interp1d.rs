@@ -80,7 +80,11 @@ where
                 Ok(())
             }?;
         }
-        Ok(Interp1D{x: self.x, y: self.y, strategy: self.strategy})
+        Ok(Interp1D {
+            x: self.x,
+            y: self.y,
+            strategy: self.strategy,
+        })
     }
 }
 

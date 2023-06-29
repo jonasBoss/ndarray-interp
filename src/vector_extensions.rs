@@ -1,5 +1,4 @@
 use ndarray::{ArrayBase, Data, Ix1, RawData};
-use std::ops::Sub;
 
 ///! This module contains the vector extensions trait
 
