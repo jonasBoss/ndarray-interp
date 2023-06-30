@@ -233,8 +233,8 @@ where
                 );
 
                 let mid = Self::calc_frac(p1, p2, x);
-                if mid < NumCast::from(0.0).unwrap_or_else(|| unimplemented!()) {
-                    // neagive values might occure when extrapolating index 0 is
+                if mid < NumCast::from(0).unwrap_or_else(|| unimplemented!()) {
+                    // neagtive values might occure when extrapolating index 0 is
                     // the guaranteed solution
                     return 0;
                 }
@@ -272,6 +272,7 @@ where
             0
         } else {
             // this relies on the fact that float -> int cast will return the next lower int
+            // for positive values
             let x = NumCast::from(x).unwrap_or_else(|| unimplemented!());
             if x > self.y.len() - 1 {
                 self.y.len() - 1
@@ -287,6 +288,7 @@ mod test {
     use ndarray::array;
     use ndarray::s;
     use ndarray::OwnedRepr;
+    use num_traits::NumCast;
 
     use super::Interp1D;
     use super::Interp1DBuilder;
@@ -295,16 +297,22 @@ mod test {
     use crate::InterpolateError;
 
     #[test]
+    fn test_type_cast_assumptions(){
+        assert_eq!(<i32 as NumCast>::from(1.75).unwrap(), 1);
+        assert_eq!(<i32 as NumCast>::from(1.25).unwrap(), 1);
+    }
+
+    #[test]
     fn interp_y_only() {
         let interp: Interp1D<OwnedRepr<_>, _> =
-            Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+            Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
                 .build()
                 .unwrap();
-        assert_eq!(interp.interp(0.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(9.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(4.5).unwrap(), 5.0);
-        assert_eq!(interp.interp(0.5).unwrap(), 1.5);
-        assert_eq!(interp.interp(8.75).unwrap(), 1.25);
+        assert_eq!(interp.interp(0.0).unwrap(), 1.5);
+        assert_eq!(interp.interp(9.0).unwrap(), 10.5);
+        assert_eq!(interp.interp(4.5).unwrap(), 6.0);
+        assert_eq!(interp.interp(0.25).unwrap(), 1.625);
+        assert_eq!(interp.interp(8.75).unwrap(), 10.125);
     }
 
     #[test]
@@ -319,16 +327,16 @@ mod test {
 
     #[test]
     fn interp_with_x_and_y() {
-        let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+        let interp = Interp1DBuilder::new(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
             .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
-        assert_eq!(interp.interp(-4.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(5.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(0.0).unwrap(), 5.0);
-        assert_eq!(interp.interp(-3.5).unwrap(), 1.5);
-        assert_eq!(interp.interp(4.75).unwrap(), 1.25);
+        assert_eq!(interp.interp(-4.0).unwrap(), 1.5);
+        assert_eq!(interp.interp(5.0).unwrap(), 10.5);
+        assert_eq!(interp.interp(0.5).unwrap(), 6.0);
+        assert_eq!(interp.interp(-3.75).unwrap(), 1.625);
+        assert_eq!(interp.interp(4.75).unwrap(), 10.125);
     }
 
     #[test]
