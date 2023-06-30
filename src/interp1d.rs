@@ -168,9 +168,9 @@ where
         let idx = self.get_left_index(x);
         let (x1, y1) = self.get_point(idx);
         let (x2, y2) = self.get_point(idx + 1);
+        let b = y1;
         let m = (y2 - y1) / (x2 - x1);
-        let b = y1 - m * x1;
-        Ok(m * x + b)
+        Ok(m * (x - x1) + b)
     }
 
     /// get x,y coordinate at given index
