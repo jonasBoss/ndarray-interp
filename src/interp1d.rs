@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex, RawData};
-use num_traits::{Float, Num, NumCast};
+use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex};
+use num_traits::{Num, NumCast};
 use thiserror::Error;
 
 use crate::vector_extensions::{Monotonic, VectorExtensions};
@@ -29,21 +29,23 @@ pub enum InterpolateError {
 }
 
 #[derive(Debug)]
-pub struct Interp1DBuilder<Sx, Sy, T>
+pub struct Interp1DBuilder<Sx, Sy>
 where
-    Sx: RawData<Elem = T> + Data,
-    Sy: RawData<Elem = T> + Data,
-    T: Num,
+    Sx: Data,
+    Sx::Elem: Debug,
+    Sy: Data,
+    Sy::Elem: Debug,
 {
     x: Option<ArrayBase<Sx, Ix1>>,
     y: ArrayBase<Sy, Ix1>,
     strategy: InterpolationStrategy,
 }
-impl<Sx, Sy, T> Interp1DBuilder<Sx, Sy, T>
+
+impl<Sx, Sy> Interp1DBuilder<Sx, Sy>
 where
-    Sx: RawData<Elem = T> + Data,
-    Sy: RawData<Elem = T> + Data,
-    T: Num + PartialOrd + Clone + NumCast,
+    Sx: Data,
+    Sx::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sy: Data<Elem = Sx::Elem>,
 {
     pub fn new(y: ArrayBase<Sy, Ix1>) -> Self {
         Interp1DBuilder {
@@ -60,7 +62,7 @@ where
         self.strategy = strategy;
         self
     }
-    pub fn build(self) -> Result<Interp1D<Sx, Sy, T>, BuilderError> {
+    pub fn build(self) -> Result<Interp1D<Sx, Sy>, BuilderError> {
         match &self.strategy {
             Linear { .. } => {
                 if self.y.len() < 2 {
@@ -92,8 +94,8 @@ where
         }
         let range = match &self.x {
             Some(x) => (
-                x.first().unwrap_or_else(|| unreachable!()).clone(),
-                x.last().unwrap_or_else(|| unreachable!()).clone(),
+                *x.first().unwrap_or_else(|| unreachable!()),
+                *x.last().unwrap_or_else(|| unreachable!()),
             ),
             None => (
                 NumCast::from(0).unwrap_or_else(|| unimplemented!()),
@@ -110,48 +112,52 @@ where
 }
 
 #[derive(Debug)]
-pub struct Interp1D<Sx, Sy, T>
+pub struct Interp1D<Sx, Sy>
 where
-    Sx: RawData<Elem = T> + Data,
-    Sy: RawData<Elem = T> + Data,
+    Sx: Data,
+    Sx::Elem: Num + Debug,
+    Sy: Data<Elem = Sx::Elem>,
 {
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of y
     x: Option<ArrayBase<Sx, Ix1>>,
     y: ArrayBase<Sy, Ix1>,
     strategy: InterpolationStrategy,
-    range: (T, T),
+    range: (Sx::Elem, Sx::Elem),
 }
 
-impl<Sx, Sy, T> Interp1D<Sx, Sy, T>
+impl<Sx, Sy> Interp1D<Sx, Sy>
 where
-    Sx: RawData<Elem = T> + Data,
-    Sy: RawData<Elem = T> + Data,
-    T: PartialOrd + Num + Clone + NumCast,
+    Sx: Data,
+    Sx::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sy: Data<Elem = Sx::Elem>,
 {
-    pub fn builder(y: ArrayBase<Sy, Ix1>) -> Interp1DBuilder<Sx, Sy, T> {
+    pub fn builder(y: ArrayBase<Sy, Ix1>) -> Interp1DBuilder<Sx, Sy> {
         Interp1DBuilder::new(y)
     }
 }
 
-impl<Sx, Sy, T> Interp1D<Sx, Sy, T>
+impl<Sx, Sy> Interp1D<Sx, Sy>
 where
-    Sx: RawData<Elem = T> + Data,
-    Sy: RawData<Elem = T> + Data,
-    T: Float + Debug,
+    Sx: Data,
+    Sx::Elem: Num + Debug + PartialOrd + NumCast + Copy,
+    Sy: Data<Elem = Sx::Elem>,
 {
     /// Interpolated value at x
-    pub fn interp(&self, x: T) -> Result<T, InterpolateError> {
+    pub fn interp(&self, x: Sx::Elem) -> Result<Sy::Elem, InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(x),
         }
     }
 
     /// Interpolate values at xs
-    pub fn interp_array<D>(&self, xs: &ArrayBase<Sx, D>) -> Result<Array<T, D>, InterpolateError>
+    pub fn interp_array<D>(
+        &self,
+        xs: &ArrayBase<Sx, D>,
+    ) -> Result<Array<Sy::Elem, D>, InterpolateError>
     where
         D: Dimension,
-        <D as Dimension>::Pattern: NdIndex<D>,
+        D::Pattern: NdIndex<D>,
     {
         let ys = Array::zeros(xs.raw_dim());
         xs.indexed_iter().try_fold(ys, |mut ys, (idx, x)| {
@@ -161,7 +167,7 @@ where
         })
     }
 
-    fn linear(&self, x: T) -> Result<T, InterpolateError> {
+    fn linear(&self, x: Sx::Elem) -> Result<Sy::Elem, InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -170,7 +176,10 @@ where
                 self.range
             )));
         }
-        let idx = self.get_left_index(x);
+        let mut idx = self.get_left_index(x);
+        if idx == self.y.len() -1 {
+            idx -= 1;
+        }
         Ok(Self::calc_frac(
             self.get_point(idx),
             self.get_point(idx + 1),
@@ -180,7 +189,7 @@ where
 
     /// get x,y coordinate at given index
     /// panics at index out of range
-    fn get_point(&self, idx: usize) -> (T, T) {
+    fn get_point(&self, idx: usize) -> (Sx::Elem, Sy::Elem) {
         match &self.x {
             Some(x) => (
                 *x.get(idx).unwrap_or_else(|| unreachable!()),
@@ -194,14 +203,18 @@ where
     }
 
     /// linearly interpolate/exrapolate between two points
-    fn calc_frac((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T {
+    fn calc_frac(
+        (x1, y1): (Sx::Elem, Sy::Elem),
+        (x2, y2): (Sx::Elem, Sy::Elem),
+        x: Sx::Elem,
+    ) -> Sx::Elem {
         let b = y1;
         let m = (y2 - y1) / (x2 - x1);
         m * (x - x1) + b
     }
 
     /// the index of known value left of, or at x
-    fn get_left_index(&self, x: T) -> usize {
+    fn get_left_index(&self, x: Sx::Elem) -> usize {
         if let Some(xs) = &self.x {
             // the x axis is given so we need to search for the index, and can not calculate it.
             // the x axis is guaranteed to be strict monotonically rising.
@@ -226,17 +239,16 @@ where
                     return 0;
                 }
 
-                let mut mid_idx: usize =
-                    NumCast::from(mid.floor()).unwrap_or_else(|| unimplemented!());
+                let mut mid_idx: usize = NumCast::from(mid).unwrap_or_else(|| unimplemented!());
                 if mid_idx == range.1 {
                     mid_idx -= 1
                 };
-                let mut mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
+                let mut mid_x = xs.get(mid_idx).unwrap_or_else(|| unreachable!());
 
-                if mid_x <= x && x <= *xs.get(mid_idx + 1).unwrap_or_else(|| unreachable!()) {
+                if mid_x <= &x && x <= *xs.get(mid_idx + 1).unwrap_or_else(|| unreachable!()) {
                     return mid_idx;
                 }
-                if mid_x < x {
+                if mid_x < &x {
                     range.0 = mid_idx;
                 } else {
                     range.1 = mid_idx;
@@ -245,27 +257,26 @@ where
                 // the above alone has the potential to end in an infinte loop
                 // do a binary search step to guarantee progress
                 mid_idx = (range.1 - range.0) / 2 + range.0;
-                mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
-                if mid_x == x {
+                mid_x = xs.get(mid_idx).unwrap_or_else(|| unreachable!());
+                if mid_x == &x {
                     return mid_idx;
                 }
-                if mid_x < x {
+                if mid_x < &x {
                     range.0 = mid_idx;
                 } else {
                     range.1 = mid_idx;
                 }
             }
             range.0
+        } else if x < NumCast::from(0).unwrap_or_else(|| unimplemented!()) {
+            0
         } else {
-            match x.ceil().to_usize().unwrap_or(0) {
-                // on negative values get the first index, this is only relevant for extrapolation
-                0 => 0, // avoid out of bounds left
-                mut x => {
-                    if x > self.y.len() - 1 {
-                        x = self.y.len() - 1;
-                    }
-                    x - 1
-                } // avoid out of bounds right
+            // this relies on the fact that float -> int cast will return the next lower int
+            let x = NumCast::from(x).unwrap_or_else(|| unimplemented!());
+            if x > self.y.len() - 1 {
+                self.y.len() - 1
+            } else {
+                x
             }
         }
     }
@@ -273,9 +284,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use ndarray::OwnedRepr;
     use ndarray::array;
     use ndarray::s;
+    use ndarray::OwnedRepr;
 
     use super::Interp1D;
     use super::Interp1DBuilder;
@@ -285,9 +296,10 @@ mod test {
 
     #[test]
     fn interp_y_only() {
-        let interp: Interp1D<OwnedRepr<_>,_,_> = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
-            .build()
-            .unwrap();
+        let interp: Interp1D<OwnedRepr<_>, _> =
+            Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+                .build()
+                .unwrap();
         assert_eq!(interp.interp(0.0).unwrap(), 1.0);
         assert_eq!(interp.interp(9.0).unwrap(), 1.0);
         assert_eq!(interp.interp(4.5).unwrap(), 5.0);
@@ -297,7 +309,7 @@ mod test {
 
     #[test]
     fn extrapolate_y_only() {
-        let interp: Interp1D<OwnedRepr<_>, _,_> = Interp1D::builder(array![1.0, 2.0, 1.5])
+        let interp: Interp1D<OwnedRepr<_>, _> = Interp1D::builder(array![1.0, 2.0, 1.5])
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
@@ -357,7 +369,8 @@ mod test {
 
     #[test]
     fn interp_y_only_out_of_bounds() {
-        let interp: Interp1D<OwnedRepr<_>, _,_> = Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
+        let interp: Interp1D<OwnedRepr<_>, _> =
+            Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
         assert!(matches!(
             interp.interp(-0.1),
             Err(InterpolateError::OutOfBounds(_))
@@ -388,7 +401,7 @@ mod test {
     #[test]
     fn interp_builder_errors() {
         assert!(matches!(
-            Interp1DBuilder::<OwnedRepr<_>, _,_>::new(array![1]).build(),
+            Interp1DBuilder::<OwnedRepr<_>, _>::new(array![1]).build(),
             Err(BuilderError::NotEnoughData(_))
         ));
         assert!(matches!(
@@ -406,7 +419,7 @@ mod test {
     }
 
     #[test]
-    fn interp_view_array(){
+    fn interp_view_array() {
         let a = array![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
         let interp = Interp1D::builder(a.slice(s![..;-1]))
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])

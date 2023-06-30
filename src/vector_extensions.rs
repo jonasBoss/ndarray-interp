@@ -1,6 +1,4 @@
-use ndarray::{ArrayBase, Data, Ix1, RawData};
-
-///! This module contains the vector extensions trait
+use ndarray::{ArrayBase, Data, Ix1};
 
 pub trait VectorExtensions {
     /// get the monotonic property of the vector
@@ -16,10 +14,10 @@ pub enum Monotonic {
 }
 use Monotonic::*;
 
-impl<S, T> VectorExtensions for ArrayBase<S, Ix1>
+impl<S> VectorExtensions for ArrayBase<S, Ix1>
 where
-    S: RawData<Elem = T> + Data,
-    T: PartialOrd,
+    S: Data,
+    S::Elem: PartialOrd,
 {
     fn monotonic_prop(&self) -> Monotonic {
         if self.len() <= 1 {
