@@ -166,11 +166,11 @@ where
             )));
         }
         let idx = self.get_left_index(x);
-        let (x1, y1) = self.get_point(idx);
-        let (x2, y2) = self.get_point(idx + 1);
-        let b = y1;
-        let m = (y2 - y1) / (x2 - x1);
-        Ok(m * (x - x1) + b)
+        Ok(Self::calc_frac(
+            self.get_point(idx),
+            self.get_point(idx + 1),
+            x,
+        ))
     }
 
     /// get x,y coordinate at given index
@@ -188,14 +188,59 @@ where
         }
     }
 
+    /// linearly interpolate/exrapolate between two points
+    fn calc_frac((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T {
+        let b = y1;
+        let m = (y2 - y1) / (x2 - x1);
+        m * (x - x1) + b
+    }
+
     /// the index of known value left of, or at x
     fn get_left_index(&self, x: T) -> usize {
         if let Some(xs) = &self.x {
-            // do bisection
+            // the x axis is given so we need to search for the index, and can not calculate it.
+            // the x axis is guaranteed to be strict monotonically rising.
+            // We assume that the spacing is even. So we can calculate the index
+            // and check it. This finishes in O(1) for even spaced axis.
+            // Otherwise we do a binary search with O(log n)
             let mut range = (0usize, xs.len() - 1);
             while range.0 + 1 < range.1 {
-                let mid_idx = (range.1 - range.0) / 2 + range.0;
-                let mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
+                let p1 = (
+                    *xs.get(range.0).unwrap_or_else(|| unreachable!()),
+                    NumCast::from(range.0).unwrap_or_else(|| unimplemented!()),
+                );
+                let p2 = (
+                    *xs.get(range.1).unwrap_or_else(|| unreachable!()),
+                    NumCast::from(range.1).unwrap_or_else(|| unimplemented!()),
+                );
+
+                let mid = Self::calc_frac(p1, p2, x);
+                if mid < NumCast::from(0.0).unwrap_or_else(|| unimplemented!()) {
+                    // neagive values might occure when extrapolating index 0 is
+                    // the guaranteed solution
+                    return 0;
+                }
+
+                let mut mid_idx: usize =
+                    NumCast::from(mid.floor()).unwrap_or_else(|| unimplemented!());
+                if mid_idx == range.1 {
+                    mid_idx -= 1
+                };
+                let mut mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
+
+                if mid_x <= x && x <= *xs.get(mid_idx + 1).unwrap_or_else(|| unreachable!()) {
+                    return mid_idx;
+                }
+                if mid_x < x {
+                    range.0 = mid_idx;
+                } else {
+                    range.1 = mid_idx;
+                }
+
+                // the above alone has the potential to end in an infinte loop
+                // do a binary search step to guarantee progress
+                mid_idx = (range.1 - range.0) / 2 + range.0;
+                mid_x = *xs.get(mid_idx).unwrap_or_else(|| unreachable!());
                 if mid_x == x {
                     return mid_idx;
                 }
@@ -265,6 +310,21 @@ mod test {
         assert_eq!(interp.interp(0.0).unwrap(), 5.0);
         assert_eq!(interp.interp(-3.5).unwrap(), 1.5);
         assert_eq!(interp.interp(4.75).unwrap(), 1.25);
+    }
+
+    #[test]
+    fn interp_with_x_and_y_expspaced() {
+        let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+            .x(array![
+                1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0
+            ])
+            .strategy(Linear { extrapolate: false })
+            .build()
+            .unwrap();
+        assert_eq!(interp.interp(1.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(512.0).unwrap(), 1.0);
+        assert_eq!(interp.interp(42.0).unwrap(), 4.6875);
+        assert_eq!(interp.interp(365.0).unwrap(), 1.57421875);
     }
 
     #[test]
