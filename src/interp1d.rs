@@ -36,7 +36,7 @@ where
     Sx: Data<Elem = Sd::Elem>,
 {
     /// x values are guaranteed to be strict monotonically rising
-    /// if x is None, the x values are assumed to be the index of y
+    /// if x is None, the x values are assumed to be the index of data
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, Ix1>,
     strategy: InterpolationStrategy,
@@ -50,8 +50,8 @@ where
     Sx: Data<Elem = Sd::Elem>,
 {
     /// Get the [[Interp1DBuilder]]
-    pub fn builder(y: ArrayBase<Sd, Ix1>) -> Interp1DBuilder<Sd, Sx> {
-        Interp1DBuilder::new(y)
+    pub fn builder(data: ArrayBase<Sd, Ix1>) -> Interp1DBuilder<Sd, Sx> {
+        Interp1DBuilder::new(data)
     }
 
     /// Interpolated value at x
@@ -99,7 +99,7 @@ where
         ))
     }
 
-    /// get x,y coordinate at given index
+    /// get x,data coordinate at given index
     /// panics at index out of range
     fn get_point(&self, idx: usize) -> (Sx::Elem, Sd::Elem) {
         match &self.x {
@@ -224,10 +224,10 @@ where
     /// Create a new [Interp1DBuilder] and provide the data to interpolate.
     /// When nothing else is configured [Interp1DBuilder::build] will create an Interpolator using
     /// Linear Interpolation without extrapolation. As x axis the index to the data would be used.
-    pub fn new(y: ArrayBase<Sd, Ix1>) -> Self {
+    pub fn new(data: ArrayBase<Sd, Ix1>) -> Self {
         Interp1DBuilder {
             x: None,
-            data: y,
+            data,
             strategy: Linear { extrapolate: false },
         }
     }
@@ -269,7 +269,7 @@ where
             }?;
             if self.data.len() != x.len() {
                 Err(BuilderError::AxisLenght(format!(
-                    "Lengths of x and y axis need to match. Got x: {:}, y: {:}",
+                    "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
                     x.len(),
                     self.data.len()
                 )))
