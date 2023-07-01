@@ -225,11 +225,11 @@ where
             while range.0 + 1 < range.1 {
                 let p1 = (
                     *xs.get(range.0).unwrap_or_else(|| unreachable!()),
-                    NumCast::from(range.0).unwrap_or_else(|| unimplemented!()),
+                    NumCast::from(range.0).unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
                 );
                 let p2 = (
                     *xs.get(range.1).unwrap_or_else(|| unreachable!()),
-                    NumCast::from(range.1).unwrap_or_else(|| unimplemented!()),
+                    NumCast::from(range.1).unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
                 );
 
                 let mid = Self::calc_frac(p1, p2, x);
@@ -239,7 +239,7 @@ where
                     return 0;
                 }
 
-                let mut mid_idx: usize = NumCast::from(mid).unwrap_or_else(|| unimplemented!());
+                let mut mid_idx: usize = NumCast::from(mid).unwrap_or_else(|| unimplemented!("mid is positive, so this should work always"));
                 if mid_idx == range.1 {
                     mid_idx -= 1
                 };
@@ -273,7 +273,7 @@ where
         } else {
             // this relies on the fact that float -> int cast will return the next lower int
             // for positive values
-            let x = NumCast::from(x).unwrap_or_else(|| unimplemented!());
+            let x = NumCast::from(x).unwrap_or_else(|| unimplemented!("x is positive, so this should always work"));
             if x > self.y.len() - 1 {
                 self.y.len() - 1
             } else {
