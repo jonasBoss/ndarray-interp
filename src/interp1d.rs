@@ -38,7 +38,7 @@ where
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of y
     x: Option<ArrayBase<Sx, Ix1>>,
-    y: ArrayBase<Sy, Ix1>,
+    data: ArrayBase<Sy, Ix1>,
     strategy: InterpolationStrategy,
     range: (Sx::Elem, Sx::Elem),
 }
@@ -89,7 +89,7 @@ where
             )));
         }
         let mut idx = self.get_left_index(x);
-        if idx == self.y.len() - 1 {
+        if idx == self.data.len() - 1 {
             idx -= 1;
         }
         Ok(Self::calc_frac(
@@ -105,11 +105,11 @@ where
         match &self.x {
             Some(x) => (
                 *x.get(idx).unwrap_or_else(|| unreachable!()),
-                *self.y.get(idx).unwrap_or_else(|| unreachable!()),
+                *self.data.get(idx).unwrap_or_else(|| unreachable!()),
             ),
             None => (
                 NumCast::from(idx).unwrap_or_else(|| unreachable!()),
-                *self.y.get(idx).unwrap_or_else(|| unreachable!()),
+                *self.data.get(idx).unwrap_or_else(|| unreachable!()),
             ),
         }
     }
@@ -193,8 +193,8 @@ where
             // for positive values
             let x = NumCast::from(x)
                 .unwrap_or_else(|| unimplemented!("x is positive, so this should always work"));
-            if x > self.y.len() - 1 {
-                self.y.len() - 1
+            if x > self.data.len() - 1 {
+                self.data.len() - 1
             } else {
                 x
             }
@@ -212,7 +212,7 @@ where
     Sy::Elem: Debug,
 {
     x: Option<ArrayBase<Sx, Ix1>>,
-    y: ArrayBase<Sy, Ix1>,
+    data: ArrayBase<Sy, Ix1>,
     strategy: InterpolationStrategy,
 }
 
@@ -228,7 +228,7 @@ where
     pub fn new(y: ArrayBase<Sy, Ix1>) -> Self {
         Interp1DBuilder {
             x: None,
-            y,
+            data: y,
             strategy: Linear { extrapolate: false },
         }
     }
@@ -251,7 +251,7 @@ where
     pub fn build(self) -> Result<Interp1D<Sx, Sy>, BuilderError> {
         match &self.strategy {
             Linear { .. } => {
-                if self.y.len() < 2 {
+                if self.data.len() < 2 {
                     Err(BuilderError::NotEnoughData(
                         "Linear Interpolation needs at least two data points".into(),
                     ))
@@ -268,11 +268,11 @@ where
                     "Values in the x axis need to be strictly monotonic rising".into(),
                 )),
             }?;
-            if self.y.len() != x.len() {
+            if self.data.len() != x.len() {
                 Err(BuilderError::AxisLenght(format!(
                     "Lengths of x and y axis need to match. Got x: {:}, y: {:}",
                     x.len(),
-                    self.y.len()
+                    self.data.len()
                 )))
             } else {
                 Ok(())
@@ -285,12 +285,12 @@ where
             ),
             None => (
                 NumCast::from(0).unwrap_or_else(|| unimplemented!()),
-                NumCast::from(self.y.len() - 1).unwrap_or_else(|| unimplemented!()),
+                NumCast::from(self.data.len() - 1).unwrap_or_else(|| unimplemented!()),
             ),
         };
         Ok(Interp1D {
             x: self.x,
-            y: self.y,
+            data: self.data,
             strategy: self.strategy,
             range,
         })
