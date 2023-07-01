@@ -29,33 +29,33 @@ pub enum InterpolateError {
 }
 
 #[derive(Debug)]
-pub struct Interp1D<Sx, Sy>
+pub struct Interp1D<Sd, Sx>
 where
-    Sx: Data,
-    Sx::Elem: Num + Debug,
-    Sy: Data<Elem = Sx::Elem>,
+    Sd: Data,
+    Sd::Elem: Num + Debug,
+    Sx: Data<Elem = Sd::Elem>,
 {
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of y
     x: Option<ArrayBase<Sx, Ix1>>,
-    data: ArrayBase<Sy, Ix1>,
+    data: ArrayBase<Sd, Ix1>,
     strategy: InterpolationStrategy,
     range: (Sx::Elem, Sx::Elem),
 }
 
-impl<Sx, Sy> Interp1D<Sx, Sy>
+impl<Sd, Sx> Interp1D<Sd, Sx>
 where
-    Sx: Data,
-    Sx::Elem: Num + PartialOrd + NumCast + Copy + Debug,
-    Sy: Data<Elem = Sx::Elem>,
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sx: Data<Elem = Sd::Elem>,
 {
     /// Get the [[Interp1DBuilder]]
-    pub fn builder(y: ArrayBase<Sy, Ix1>) -> Interp1DBuilder<Sx, Sy> {
+    pub fn builder(y: ArrayBase<Sd, Ix1>) -> Interp1DBuilder<Sd, Sx> {
         Interp1DBuilder::new(y)
     }
 
     /// Interpolated value at x
-    pub fn interp(&self, x: Sx::Elem) -> Result<Sy::Elem, InterpolateError> {
+    pub fn interp(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(x),
         }
@@ -65,7 +65,7 @@ where
     pub fn interp_array<D>(
         &self,
         xs: &ArrayBase<Sx, D>,
-    ) -> Result<Array<Sy::Elem, D>, InterpolateError>
+    ) -> Result<Array<Sd::Elem, D>, InterpolateError>
     where
         D: Dimension,
         D::Pattern: NdIndex<D>,
@@ -79,7 +79,7 @@ where
     }
 
     /// the implementation for [Linear] strategy
-    fn linear(&self, x: Sx::Elem) -> Result<Sy::Elem, InterpolateError> {
+    fn linear(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -101,7 +101,7 @@ where
 
     /// get x,y coordinate at given index
     /// panics at index out of range
-    fn get_point(&self, idx: usize) -> (Sx::Elem, Sy::Elem) {
+    fn get_point(&self, idx: usize) -> (Sx::Elem, Sd::Elem) {
         match &self.x {
             Some(x) => (
                 *x.get(idx).unwrap_or_else(|| unreachable!()),
@@ -116,8 +116,8 @@ where
 
     /// linearly interpolate/exrapolate between two points
     fn calc_frac(
-        (x1, y1): (Sx::Elem, Sy::Elem),
-        (x2, y2): (Sx::Elem, Sy::Elem),
+        (x1, y1): (Sx::Elem, Sd::Elem),
+        (x2, y2): (Sx::Elem, Sd::Elem),
         x: Sx::Elem,
     ) -> Sx::Elem {
         let b = y1;
@@ -204,28 +204,27 @@ where
 
 /// Create and configure a [Interp1D] Interpolator.
 #[derive(Debug)]
-pub struct Interp1DBuilder<Sx, Sy>
+pub struct Interp1DBuilder<Sd, Sx>
 where
-    Sx: Data,
-    Sx::Elem: Debug,
-    Sy: Data,
-    Sy::Elem: Debug,
+    Sd: Data,
+    Sd::Elem: Num + Debug,
+    Sx: Data<Elem = Sd::Elem>,
 {
     x: Option<ArrayBase<Sx, Ix1>>,
-    data: ArrayBase<Sy, Ix1>,
+    data: ArrayBase<Sd, Ix1>,
     strategy: InterpolationStrategy,
 }
 
-impl<Sx, Sy> Interp1DBuilder<Sx, Sy>
+impl<Sd, Sx> Interp1DBuilder<Sd, Sx>
 where
-    Sx: Data,
-    Sx::Elem: Num + PartialOrd + NumCast + Copy + Debug,
-    Sy: Data<Elem = Sx::Elem>,
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sx: Data<Elem = Sd::Elem>,
 {
     /// Create a new [Interp1DBuilder] and provide the data to interpolate.
     /// When nothing else is configured [Interp1DBuilder::build] will create an Interpolator using
     /// Linear Interpolation without extrapolation. As x axis the index to the data would be used.
-    pub fn new(y: ArrayBase<Sy, Ix1>) -> Self {
+    pub fn new(y: ArrayBase<Sd, Ix1>) -> Self {
         Interp1DBuilder {
             x: None,
             data: y,
@@ -248,7 +247,7 @@ where
     }
 
     /// Validate input data and create the configured [Interp1D]
-    pub fn build(self) -> Result<Interp1D<Sx, Sy>, BuilderError> {
+    pub fn build(self) -> Result<Interp1D<Sd, Sx>, BuilderError> {
         match &self.strategy {
             Linear { .. } => {
                 if self.data.len() < 2 {
@@ -318,7 +317,7 @@ mod test {
 
     #[test]
     fn interp_y_only() {
-        let interp: Interp1D<OwnedRepr<_>, _> =
+        let interp: Interp1D<_, OwnedRepr<_>> =
             Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
                 .build()
                 .unwrap();
@@ -331,7 +330,7 @@ mod test {
 
     #[test]
     fn extrapolate_y_only() {
-        let interp: Interp1D<OwnedRepr<_>, _> = Interp1D::builder(array![1.0, 2.0, 1.5])
+        let interp: Interp1D<_, OwnedRepr<_>> = Interp1D::builder(array![1.0, 2.0, 1.5])
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
@@ -392,7 +391,7 @@ mod test {
 
     #[test]
     fn interp_y_only_out_of_bounds() {
-        let interp: Interp1D<OwnedRepr<_>, _> =
+        let interp: Interp1D<_, OwnedRepr<_>> =
             Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
         assert!(matches!(
             interp.interp(-0.1),
@@ -424,7 +423,7 @@ mod test {
     #[test]
     fn interp_builder_errors() {
         assert!(matches!(
-            Interp1DBuilder::<OwnedRepr<_>, _>::new(array![1]).build(),
+            Interp1DBuilder::<_, OwnedRepr<_>>::new(array![1]).build(),
             Err(BuilderError::NotEnoughData(_))
         ));
         assert!(matches!(
