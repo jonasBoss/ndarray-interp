@@ -12,3 +12,5 @@ thiserror = "1.0.40"
 
 [dev-dependencies]
 cargo-tarpaulin = "0.26.0"
+ndarray = { version = "0.15", features = ["approx-0_5"] }
+approx = "0.5.1"

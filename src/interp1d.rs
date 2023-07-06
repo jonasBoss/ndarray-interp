@@ -1,7 +1,7 @@
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
-    Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
+    s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
     Ix1, NdIndex, RemoveAxis, Slice,
 };
 use num_traits::{Num, NumCast};
@@ -80,7 +80,11 @@ where
         let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
         dim.as_array_view_mut()
             .into_iter()
-            .zip(xs.shape().iter().chain(self.data.shape()))
+            .zip(
+                xs.shape()
+                    .iter()
+                    .chain(self.data.raw_dim().as_array_view().slice(s![1..])),
+            )
             .for_each(|(new_axis, len)| {
                 *new_axis = *len;
             });
@@ -345,6 +349,7 @@ where
 
 #[cfg(test)]
 mod test {
+    use approx::assert_abs_diff_eq;
     use ndarray::array;
     use ndarray::s;
     use ndarray::OwnedRepr;
@@ -510,13 +515,16 @@ mod test {
             [10.0, 20.0, 30.0, 40.0, 50.0],
             [20.0, 40.0, 60.0, 80.0, 100.0],
         ];
-        let interp = Interp1DBuilder::new(data.t())
-            .x(array![1.0, 2.0, 3.0, 4.0, 5.0])
+        let interp = Interp1DBuilder::new(data)
+            .x(array![1.0, 2.0, 3.0, 4.0])
             .build()
             .unwrap();
-        println!("{:?}", interp.interp(1.5).unwrap());
-        println!("{data:?}");
-        println!("{:?}", data.t())
-        //assert_eq!(interp.interp(0.5).unwrap(),array![0.15])
+        let res = interp.interp(1.5).unwrap();
+        assert_abs_diff_eq!(
+            res,
+            array![[1.05, 1.1, 1.65, 2.2, 2.75]],
+            epsilon = f64::EPSILON
+        );
+        println!("{:?}", interp.interp_array(&array![1.0, 2.0, 3.0]))
     }
 }
