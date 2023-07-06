@@ -1,6 +1,6 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex};
+use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex, Axis, Slice, ArrayView, RemoveAxis, DimAdd, AxisDescription, IntoDimension};
 use num_traits::{Num, NumCast};
 use thiserror::Error;
 
@@ -28,58 +28,80 @@ pub enum InterpolateError {
     OutOfBounds(String),
 }
 
+/// One dimensional Interpolator
 #[derive(Debug)]
-pub struct Interp1D<Sd, Sx>
+pub struct Interp1D<Sd, Sx, D>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
     Sx: Data<Elem = Sd::Elem>,
+    D: Dimension,
 {
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of data
     x: Option<ArrayBase<Sx, Ix1>>,
-    data: ArrayBase<Sd, Ix1>,
+    data: ArrayBase<Sd, D>,
     strategy: InterpolationStrategy,
     range: (Sx::Elem, Sx::Elem),
 }
 
-impl<Sd, Sx> Interp1D<Sd, Sx>
+impl<Sd, Sx, D> Interp1D<Sd, Sx, D>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
+    D: Dimension,
 {
-    /// Get the [[Interp1DBuilder]]
-    pub fn builder(data: ArrayBase<Sd, Ix1>) -> Interp1DBuilder<Sd, Sx> {
+    /// Get the [Interp1DBuilder]
+    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, Sx, D> {
         Interp1DBuilder::new(data)
     }
 
     /// Interpolated value at x
-    pub fn interp(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
+    pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D>, InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(x),
         }
     }
 
     /// Interpolate values at xs
-    pub fn interp_array<D>(
+    pub fn interp_array<Dq>(
         &self,
-        xs: &ArrayBase<Sx, D>,
-    ) -> Result<Array<Sd::Elem, D>, InterpolateError>
+        xs: &ArrayBase<Sx, Dq>,
+    ) -> Result< Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
     where
-        D: Dimension,
-        D::Pattern: NdIndex<D>,
-    {
-        let ys = Array::zeros(xs.raw_dim());
-        xs.indexed_iter().try_fold(ys, |mut ys, (idx, x)| {
-            let y_ref = ys.get_mut(idx).unwrap_or_else(|| unreachable!());
-            *y_ref = self.interp(*x)?;
-            Ok(ys)
-        })
+        D: RemoveAxis,
+        Dq: Dimension + DimAdd<D::Smaller>,
+        Dq::Pattern: NdIndex<Dq>,
+    {   
+        let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
+        dim.as_array_view_mut()
+            .into_iter()
+            .zip(xs.shape().iter().chain(self.data.shape()))
+            .for_each(|(new_axis, len)| {*new_axis = *len;});
+
+        let mut ys = Array::zeros(dim);
+
+        // Perform interpolation for each index
+        for (index, x) in xs.indexed_iter() {
+            let current_dim = index.clone().into_dimension();
+            let interpolated_value = self.interp(*x)?;
+
+            let mut subview =  ys.slice_each_axis_mut(
+                |AxisDescription{axis: Axis(nr),..}| match current_dim.as_array_view().get(nr){
+                    Some(idx) => Slice::from(*idx..*idx+1),
+                    None => Slice::from(..),
+                }
+            );
+            // Assign the interpolated value to the subview
+            subview.assign(&interpolated_value);
+        }
+    
+        Ok(ys)
     }
 
     /// the implementation for [Linear] strategy
-    fn linear(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
+    fn linear(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D>, InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -92,7 +114,7 @@ where
         if idx == self.data.len() - 1 {
             idx -= 1;
         }
-        Ok(Self::calc_frac(
+        Ok(Self::calc_frac_arr(
             self.get_point(idx),
             self.get_point(idx + 1),
             x,
@@ -101,15 +123,17 @@ where
 
     /// get x,data coordinate at given index
     /// panics at index out of range
-    fn get_point(&self, idx: usize) -> (Sx::Elem, Sd::Elem) {
+    fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D>) {
+        let slice =  Slice::from(idx..idx + 1);
+        let view = self.data.slice_axis(Axis(0), slice);
         match &self.x {
             Some(x) => (
                 *x.get(idx).unwrap_or_else(|| unreachable!()),
-                *self.data.get(idx).unwrap_or_else(|| unreachable!()),
+                view,
             ),
             None => (
                 NumCast::from(idx).unwrap_or_else(|| unreachable!()),
-                *self.data.get(idx).unwrap_or_else(|| unreachable!()),
+                view,
             ),
         }
     }
@@ -123,6 +147,19 @@ where
         let b = y1;
         let m = (y2 - y1) / (x2 - x1);
         m * (x - x1) + b
+    }
+
+    /// Same thing as [`.calc_frac`] but elementwise over the ArrayView
+    fn calc_frac_arr(
+        (x1, y1): (Sx::Elem,  ArrayView<Sd::Elem, D>),
+        (x2, y2): (Sx::Elem,  ArrayView<Sd::Elem, D>),
+        x: Sx::Elem,
+    ) ->  Array<Sd::Elem, D> {
+        let mut res = y2.to_owned();
+        res.zip_mut_with(&y1, |y2, y1|{
+            *y2 = Self::calc_frac((x1, *y1), (x2, *y2), x);
+        });
+        res
     }
 
     /// the index of known value left of, or at x
@@ -204,27 +241,29 @@ where
 
 /// Create and configure a [Interp1D] Interpolator.
 #[derive(Debug)]
-pub struct Interp1DBuilder<Sd, Sx>
+pub struct Interp1DBuilder<Sd, Sx, D>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
     Sx: Data<Elem = Sd::Elem>,
+    D:Dimension,
 {
     x: Option<ArrayBase<Sx, Ix1>>,
-    data: ArrayBase<Sd, Ix1>,
+    data: ArrayBase<Sd, D>,
     strategy: InterpolationStrategy,
 }
 
-impl<Sd, Sx> Interp1DBuilder<Sd, Sx>
+impl<Sd, Sx, D> Interp1DBuilder<Sd, Sx, D>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
     Sx: Data<Elem = Sd::Elem>,
+    D: Dimension,
 {
     /// Create a new [Interp1DBuilder] and provide the data to interpolate.
     /// When nothing else is configured [Interp1DBuilder::build] will create an Interpolator using
     /// Linear Interpolation without extrapolation. As x axis the index to the data would be used.
-    pub fn new(data: ArrayBase<Sd, Ix1>) -> Self {
+    pub fn new(data: ArrayBase<Sd, D>) -> Self {
         Interp1DBuilder {
             x: None,
             data,
@@ -247,7 +286,7 @@ where
     }
 
     /// Validate input data and create the configured [Interp1D]
-    pub fn build(self) -> Result<Interp1D<Sd, Sx>, BuilderError> {
+    pub fn build(self) -> Result<Interp1D<Sd, Sx, D>, BuilderError> {
         match &self.strategy {
             Linear { .. } => {
                 if self.data.len() < 2 {
@@ -317,25 +356,25 @@ mod test {
 
     #[test]
     fn interp_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>> =
+        let interp: Interp1D<_, OwnedRepr<_>,_> =
             Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
                 .build()
                 .unwrap();
-        assert_eq!(interp.interp(0.0).unwrap(), 1.5);
-        assert_eq!(interp.interp(9.0).unwrap(), 10.5);
-        assert_eq!(interp.interp(4.5).unwrap(), 6.0);
-        assert_eq!(interp.interp(0.25).unwrap(), 1.625);
-        assert_eq!(interp.interp(8.75).unwrap(), 10.125);
+        assert_eq!(*interp.interp(0.0).unwrap().get(0).unwrap(), 1.5);
+        assert_eq!(*interp.interp(9.0).unwrap().get(0).unwrap(), 10.5);
+        assert_eq!(*interp.interp(4.5).unwrap().get(0).unwrap(), 6.0);
+        assert_eq!(*interp.interp(0.25).unwrap().get(0).unwrap(), 1.625);
+        assert_eq!(*interp.interp(8.75).unwrap().get(0).unwrap(), 10.125);
     }
 
     #[test]
     fn extrapolate_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>> = Interp1D::builder(array![1.0, 2.0, 1.5])
+        let interp: Interp1D<_, OwnedRepr<_>,_> = Interp1D::builder(array![1.0, 2.0, 1.5])
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
-        assert_eq!(interp.interp(-1.0).unwrap(), 0.0);
-        assert_eq!(interp.interp(3.0).unwrap(), 1.0);
+        assert_eq!(*interp.interp(-1.0).unwrap().get(0).unwrap(), 0.0);
+        assert_eq!(*interp.interp(3.0).unwrap().get(0).unwrap(), 1.0);
     }
 
     #[test]
@@ -346,11 +385,11 @@ mod test {
                 .strategy(Linear { extrapolate: false })
                 .build()
                 .unwrap();
-        assert_eq!(interp.interp(-4.0).unwrap(), 1.5);
-        assert_eq!(interp.interp(5.0).unwrap(), 10.5);
-        assert_eq!(interp.interp(0.5).unwrap(), 6.0);
-        assert_eq!(interp.interp(-3.75).unwrap(), 1.625);
-        assert_eq!(interp.interp(4.75).unwrap(), 10.125);
+        assert_eq!(*interp.interp(-4.0).unwrap().get(0).unwrap(), 1.5);
+        assert_eq!(*interp.interp(5.0).unwrap().get(0).unwrap(), 10.5);
+        assert_eq!(*interp.interp(0.5).unwrap().get(0).unwrap(), 6.0);
+        assert_eq!(*interp.interp(-3.75).unwrap().get(0).unwrap(), 1.625);
+        assert_eq!(*interp.interp(4.75).unwrap().get(0).unwrap(), 10.125);
     }
 
     #[test]
@@ -362,10 +401,10 @@ mod test {
             .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
-        assert_eq!(interp.interp(1.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(512.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(42.0).unwrap(), 4.6875);
-        assert_eq!(interp.interp(365.0).unwrap(), 1.57421875);
+        assert_eq!(*interp.interp(1.0).unwrap().get(0).unwrap(), 1.0);
+        assert_eq!(*interp.interp(512.0).unwrap().get(0).unwrap(), 1.0);
+        assert_eq!(*interp.interp(42.0).unwrap().get(0).unwrap(), 4.6875);
+        assert_eq!(*interp.interp(365.0).unwrap().get(0).unwrap(), 1.57421875);
     }
 
     #[test]
@@ -375,8 +414,8 @@ mod test {
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
-        assert_eq!(interp.interp(-1.0).unwrap(), 2.0);
-        assert_eq!(interp.interp(2.0).unwrap(), 3.0);
+        assert_eq!(*interp.interp(-1.0).unwrap().get(0).unwrap(), 2.0);
+        assert_eq!(*interp.interp(2.0).unwrap().get(0).unwrap(), 3.0);
     }
 
     #[test]
@@ -391,7 +430,7 @@ mod test {
 
     #[test]
     fn interp_y_only_out_of_bounds() {
-        let interp: Interp1D<_, OwnedRepr<_>> =
+        let interp: Interp1D<_, OwnedRepr<_>,_> =
             Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
         assert!(matches!(
             interp.interp(-0.1),
@@ -423,7 +462,7 @@ mod test {
     #[test]
     fn interp_builder_errors() {
         assert!(matches!(
-            Interp1DBuilder::<_, OwnedRepr<_>>::new(array![1]).build(),
+            Interp1DBuilder::<_, OwnedRepr<_>,_>::new(array![1]).build(),
             Err(BuilderError::NotEnoughData(_))
         ));
         assert!(matches!(
@@ -447,10 +486,27 @@ mod test {
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
             .build()
             .unwrap();
-        assert_eq!(interp.interp(-4.0).unwrap(), 10.0);
-        assert_eq!(interp.interp(5.0).unwrap(), 1.0);
-        assert_eq!(interp.interp(0.0).unwrap(), 6.0);
-        assert_eq!(interp.interp(-3.5).unwrap(), 9.5);
-        assert_eq!(interp.interp(4.75).unwrap(), 1.25);
+        assert_eq!(*interp.interp(-4.0).unwrap().get(0).unwrap(), 10.0);
+        assert_eq!(*interp.interp(5.0).unwrap().get(0).unwrap(), 1.0);
+        assert_eq!(*interp.interp(0.0).unwrap().get(0).unwrap(), 6.0);
+        assert_eq!(*interp.interp(-3.5).unwrap().get(0).unwrap(), 9.5);
+        assert_eq!(*interp.interp(4.75).unwrap().get(0).unwrap(), 1.25);
     }
+
+    #[test]
+    fn interp_multi_fn(){
+        let data = array![
+            [0.1,0.2,0.3,0.4,0.5],
+            [1.0,2.0,3.0,4.0,5.0]
+        ];
+        let data2 = array![
+            [0.1,0.2,0.3,0.4,0.5],
+            [1.0,2.0,3.0,4.0,5.0]
+        ];
+        let d1_view = data.view();
+        let d2_view = data2.view();
+        //d1_view.to_owned().zip_mut_with(&d2_view, f)
+    }
+
+
 }
