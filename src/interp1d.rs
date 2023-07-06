@@ -1,6 +1,9 @@
 use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{Array, ArrayBase, Data, Dimension, Ix1, NdIndex, Axis, Slice, ArrayView, RemoveAxis, DimAdd, AxisDescription, IntoDimension};
+use ndarray::{
+    Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
+    Ix1, NdIndex, RemoveAxis, Slice,
+};
 use num_traits::{Num, NumCast};
 use thiserror::Error;
 
@@ -68,17 +71,19 @@ where
     pub fn interp_array<Dq>(
         &self,
         xs: &ArrayBase<Sx, Dq>,
-    ) -> Result< Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
+    ) -> Result<Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
     where
         D: RemoveAxis,
         Dq: Dimension + DimAdd<D::Smaller>,
         Dq::Pattern: NdIndex<Dq>,
-    {   
+    {
         let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
         dim.as_array_view_mut()
             .into_iter()
             .zip(xs.shape().iter().chain(self.data.shape()))
-            .for_each(|(new_axis, len)| {*new_axis = *len;});
+            .for_each(|(new_axis, len)| {
+                *new_axis = *len;
+            });
 
         let mut ys = Array::zeros(dim);
 
@@ -87,16 +92,18 @@ where
             let current_dim = index.clone().into_dimension();
             let interpolated_value = self.interp(*x)?;
 
-            let mut subview =  ys.slice_each_axis_mut(
-                |AxisDescription{axis: Axis(nr),..}| match current_dim.as_array_view().get(nr){
-                    Some(idx) => Slice::from(*idx..*idx+1),
+            let mut subview =
+                ys.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| match current_dim
+                    .as_array_view()
+                    .get(nr)
+                {
+                    Some(idx) => Slice::from(*idx..*idx + 1),
                     None => Slice::from(..),
-                }
-            );
+                });
             // Assign the interpolated value to the subview
             subview.assign(&interpolated_value);
         }
-    
+
         Ok(ys)
     }
 
@@ -124,17 +131,11 @@ where
     /// get x,data coordinate at given index
     /// panics at index out of range
     fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D>) {
-        let slice =  Slice::from(idx..idx + 1);
+        let slice = Slice::from(idx..idx + 1);
         let view = self.data.slice_axis(Axis(0), slice);
         match &self.x {
-            Some(x) => (
-                *x.get(idx).unwrap_or_else(|| unreachable!()),
-                view,
-            ),
-            None => (
-                NumCast::from(idx).unwrap_or_else(|| unreachable!()),
-                view,
-            ),
+            Some(x) => (*x.get(idx).unwrap_or_else(|| unreachable!()), view),
+            None => (NumCast::from(idx).unwrap_or_else(|| unreachable!()), view),
         }
     }
 
@@ -151,12 +152,12 @@ where
 
     /// Same thing as [`.calc_frac`] but elementwise over the ArrayView
     fn calc_frac_arr(
-        (x1, y1): (Sx::Elem,  ArrayView<Sd::Elem, D>),
-        (x2, y2): (Sx::Elem,  ArrayView<Sd::Elem, D>),
+        (x1, y1): (Sx::Elem, ArrayView<Sd::Elem, D>),
+        (x2, y2): (Sx::Elem, ArrayView<Sd::Elem, D>),
         x: Sx::Elem,
-    ) ->  Array<Sd::Elem, D> {
+    ) -> Array<Sd::Elem, D> {
         let mut res = y2.to_owned();
-        res.zip_mut_with(&y1, |y2, y1|{
+        res.zip_mut_with(&y1, |y2, y1| {
             *y2 = Self::calc_frac((x1, *y1), (x2, *y2), x);
         });
         res
@@ -246,7 +247,7 @@ where
     Sd: Data,
     Sd::Elem: Num + Debug,
     Sx: Data<Elem = Sd::Elem>,
-    D:Dimension,
+    D: Dimension,
 {
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
@@ -306,7 +307,14 @@ where
                     "Values in the x axis need to be strictly monotonic rising".into(),
                 )),
             }?;
-            if self.data.len() != x.len() {
+            if *self
+                .data
+                .raw_dim()
+                .as_array_view()
+                .get(0)
+                .unwrap_or_else(|| unreachable!())
+                != x.len()
+            {
                 Err(BuilderError::AxisLenght(format!(
                     "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
                     x.len(),
@@ -356,7 +364,7 @@ mod test {
 
     #[test]
     fn interp_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>,_> =
+        let interp: Interp1D<_, OwnedRepr<_>, _> =
             Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
                 .build()
                 .unwrap();
@@ -369,7 +377,7 @@ mod test {
 
     #[test]
     fn extrapolate_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>,_> = Interp1D::builder(array![1.0, 2.0, 1.5])
+        let interp: Interp1D<_, OwnedRepr<_>, _> = Interp1D::builder(array![1.0, 2.0, 1.5])
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
@@ -430,7 +438,7 @@ mod test {
 
     #[test]
     fn interp_y_only_out_of_bounds() {
-        let interp: Interp1D<_, OwnedRepr<_>,_> =
+        let interp: Interp1D<_, OwnedRepr<_>, _> =
             Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
         assert!(matches!(
             interp.interp(-0.1),
@@ -462,7 +470,7 @@ mod test {
     #[test]
     fn interp_builder_errors() {
         assert!(matches!(
-            Interp1DBuilder::<_, OwnedRepr<_>,_>::new(array![1]).build(),
+            Interp1DBuilder::<_, OwnedRepr<_>, _>::new(array![1]).build(),
             Err(BuilderError::NotEnoughData(_))
         ));
         assert!(matches!(
@@ -486,6 +494,7 @@ mod test {
             .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
             .build()
             .unwrap();
+        println!("{:?}", interp.interp(5.0).unwrap());
         assert_eq!(*interp.interp(-4.0).unwrap().get(0).unwrap(), 10.0);
         assert_eq!(*interp.interp(5.0).unwrap().get(0).unwrap(), 1.0);
         assert_eq!(*interp.interp(0.0).unwrap().get(0).unwrap(), 6.0);
@@ -494,19 +503,20 @@ mod test {
     }
 
     #[test]
-    fn interp_multi_fn(){
+    fn interp_multi_fn() {
         let data = array![
-            [0.1,0.2,0.3,0.4,0.5],
-            [1.0,2.0,3.0,4.0,5.0]
+            [0.1, 0.2, 0.3, 0.4, 0.5],
+            [2.0, 2.0, 3.0, 4.0, 5.0],
+            [10.0, 20.0, 30.0, 40.0, 50.0],
+            [20.0, 40.0, 60.0, 80.0, 100.0],
         ];
-        let data2 = array![
-            [0.1,0.2,0.3,0.4,0.5],
-            [1.0,2.0,3.0,4.0,5.0]
-        ];
-        let d1_view = data.view();
-        let d2_view = data2.view();
-        //d1_view.to_owned().zip_mut_with(&d2_view, f)
+        let interp = Interp1DBuilder::new(data.t())
+            .x(array![1.0, 2.0, 3.0, 4.0, 5.0])
+            .build()
+            .unwrap();
+        println!("{:?}", interp.interp(1.5).unwrap());
+        println!("{data:?}");
+        println!("{:?}", data.t())
+        //assert_eq!(interp.interp(0.5).unwrap(),array![0.15])
     }
-
-
 }
