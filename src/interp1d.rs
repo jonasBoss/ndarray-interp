@@ -54,6 +54,8 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
 {
+    /// convinient interpolation function for interpolation at one point 
+    /// when the data dimension is [`type@Ix1`]
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         match &self.strategy {
             Linear { .. } => Ok(*self.linear(x)?.first().unwrap_or_else(|| unreachable!())),
@@ -73,14 +75,77 @@ where
         Interp1DBuilder::new(data)
     }
 
-    /// Interpolated value at x
+    /// Calculate the interpolated values at `x`.
+    /// **returns** the interpolated data in an array one dimension smaller than 
+    /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar) 
+    /// when the data dimension is [`type@Ix1`]
     pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(x),
         }
     }
 
-    /// Interpolate values at xs
+    /// Calculate the interpolated values at all points in `xs`
+    /// 
+    /// ```rust
+    /// # use rs_interp::*;
+    /// # use ndarray::*;
+    /// # use InterpolationStrategy::*;
+    /// # use approx::*;
+    /// 
+    /// let data =     array![0.0,  0.5, 1.0 ];
+    /// let x =        array![0.0,  1.0, 2.0 ];
+    /// let query =    array![0.5,  1.0, 1.5 ];
+    /// let expected = array![0.25, 0.5, 0.75];
+    /// 
+    /// let interpolator = Interp1DBuilder::new(data)
+    ///     .x(x)
+    ///     .strategy(Linear{extrapolate: false})
+    ///     .build().unwrap();
+    /// let result = interpolator.interp_array(&query).unwrap();
+    /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
+    /// ```
+    /// 
+    /// # Dimensions
+    /// given the data dimension is `N` and the dimension of `xs` is `M`
+    /// the return array will have dimension `M + N - 1` where the first 
+    /// `M` dimensions correspond to the dimension in `xs`.
+    /// 
+    /// ```rust
+    /// # use rs_interp::*;
+    /// # use ndarray::*;
+    /// # use InterpolationStrategy::*;
+    /// # use approx::*;
+    /// 
+    /// // data has 2 dimension:
+    /// let data = array![
+    ///     [0.0, 2.0],
+    ///     [0.5, 2.5],
+    ///     [1.0, 3.0],
+    /// ];
+    /// let x = array![
+    ///     0.0, 
+    ///     1.0,
+    ///     2.0,
+    /// ];
+    /// // query with 2 dimensions:
+    /// let query = array![
+    ///     [0.0, 0.5],
+    ///     [1.0, 1.5],
+    /// ];
+    /// // expecting 3 dimensions!
+    /// let expected = array![
+    ///     [[0.0, 2.0], [0.25, 2.25]], // result for x=[0.0, 0.5]
+    ///     [[0.5, 2.5], [0.75, 2.75]], // result for x=[1.0, 1.5]
+    /// ];
+    /// 
+    /// let interpolator = Interp1DBuilder::new(data)
+    ///     .x(x)
+    ///     .strategy(Linear{extrapolate: false})
+    ///     .build().unwrap();
+    /// let result = interpolator.interp_array(&query).unwrap();
+    /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
+    /// ```
     pub fn interp_array<Dq>(
         &self,
         xs: &ArrayBase<Sx, Dq>,
@@ -172,8 +237,9 @@ where
         (x1, y1): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
         (x2, y2): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
         x: Sx::Elem,
-    ) -> Array<Sd::Elem, Dim> 
-    where Dim: Dimension
+    ) -> Array<Sd::Elem, Dim>
+    where
+        Dim: Dimension,
     {
         let mut res = y2.to_owned();
         res.zip_mut_with(&y1, |y2, y1| {
