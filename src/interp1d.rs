@@ -48,6 +48,19 @@ where
     range: (Sx::Elem, Sx::Elem),
 }
 
+impl<Sd, Sx> Interp1D<Sd, Sx, Ix1>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sx: Data<Elem = Sd::Elem>,
+{
+    pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
+        match &self.strategy {
+            Linear { .. } => Ok(*self.linear(x)?.first().unwrap_or_else(|| unreachable!())),
+        }
+    }
+}
+
 impl<Sd, Sx, D> Interp1D<Sd, Sx, D>
 where
     Sd: Data,
