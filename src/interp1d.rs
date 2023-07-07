@@ -525,6 +525,25 @@ mod test {
             array![[1.05, 1.1, 1.65, 2.2, 2.75]],
             epsilon = f64::EPSILON
         );
-        println!("{:?}", interp.interp_array(&array![1.0, 2.0, 3.0]))
+        let array_array = interp
+            .interp_array(&array![[1.0, 1.5], [3.5, 4.0]])
+            .unwrap();
+
+        assert_abs_diff_eq!(
+            array_array.slice(s![1, 1, ..]),
+            array![20.0, 40.0, 60.0, 80.0, 100.0],
+            epsilon = f64::EPSILON
+        );
+        assert_abs_diff_eq!(
+            array_array,
+            array![
+                [[0.1, 0.2, 0.3, 0.4, 0.5], [1.05, 1.1, 1.65, 2.2, 2.75]],
+                [
+                    [15.0, 30.0, 45.0, 60.0, 75.0],
+                    [20.0, 40.0, 60.0, 80.0, 100.0]
+                ]
+            ],
+            epsilon = f64::EPSILON
+        );
     }
 }
