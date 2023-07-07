@@ -53,7 +53,7 @@ where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
 {
     /// Get the [Interp1DBuilder]
     pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, Sx, D> {
@@ -61,7 +61,7 @@ where
     }
 
     /// Interpolated value at x
-    pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D>, InterpolateError> {
+    pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(x),
         }
@@ -112,7 +112,7 @@ where
     }
 
     /// the implementation for [Linear] strategy
-    fn linear(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D>, InterpolateError> {
+    fn linear(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -134,9 +134,9 @@ where
 
     /// get x,data coordinate at given index
     /// panics at index out of range
-    fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D>) {
+    fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
         let slice = Slice::from(idx..idx + 1);
-        let view = self.data.slice_axis(Axis(0), slice);
+        let view = self.data.slice_axis(Axis(0), slice).remove_axis(Axis(0));
         match &self.x {
             Some(x) => (*x.get(idx).unwrap_or_else(|| unreachable!()), view),
             None => (NumCast::from(idx).unwrap_or_else(|| unreachable!()), view),
@@ -155,11 +155,13 @@ where
     }
 
     /// Same thing as [`.calc_frac`] but elementwise over the ArrayView
-    fn calc_frac_arr(
-        (x1, y1): (Sx::Elem, ArrayView<Sd::Elem, D>),
-        (x2, y2): (Sx::Elem, ArrayView<Sd::Elem, D>),
+    fn calc_frac_arr<Dim>(
+        (x1, y1): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
+        (x2, y2): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
         x: Sx::Elem,
-    ) -> Array<Sd::Elem, D> {
+    ) -> Array<Sd::Elem, Dim> 
+    where Dim: Dimension
+    {
         let mut res = y2.to_owned();
         res.zip_mut_with(&y1, |y2, y1| {
             *y2 = Self::calc_frac((x1, *y1), (x2, *y2), x);
@@ -373,11 +375,11 @@ mod test {
             Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
                 .build()
                 .unwrap();
-        assert_eq!(*interp.interp(0.0).unwrap().get(0).unwrap(), 1.5);
-        assert_eq!(*interp.interp(9.0).unwrap().get(0).unwrap(), 10.5);
-        assert_eq!(*interp.interp(4.5).unwrap().get(0).unwrap(), 6.0);
-        assert_eq!(*interp.interp(0.25).unwrap().get(0).unwrap(), 1.625);
-        assert_eq!(*interp.interp(8.75).unwrap().get(0).unwrap(), 10.125);
+        assert_eq!(*interp.interp(0.0).unwrap().first().unwrap(), 1.5);
+        assert_eq!(*interp.interp(9.0).unwrap().first().unwrap(), 10.5);
+        assert_eq!(*interp.interp(4.5).unwrap().first().unwrap(), 6.0);
+        assert_eq!(*interp.interp(0.25).unwrap().first().unwrap(), 1.625);
+        assert_eq!(*interp.interp(8.75).unwrap().first().unwrap(), 10.125);
     }
 
     #[test]
@@ -386,8 +388,8 @@ mod test {
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
-        assert_eq!(*interp.interp(-1.0).unwrap().get(0).unwrap(), 0.0);
-        assert_eq!(*interp.interp(3.0).unwrap().get(0).unwrap(), 1.0);
+        assert_eq!(*interp.interp(-1.0).unwrap().first().unwrap(), 0.0);
+        assert_eq!(*interp.interp(3.0).unwrap().first().unwrap(), 1.0);
     }
 
     #[test]
@@ -398,11 +400,11 @@ mod test {
                 .strategy(Linear { extrapolate: false })
                 .build()
                 .unwrap();
-        assert_eq!(*interp.interp(-4.0).unwrap().get(0).unwrap(), 1.5);
-        assert_eq!(*interp.interp(5.0).unwrap().get(0).unwrap(), 10.5);
-        assert_eq!(*interp.interp(0.5).unwrap().get(0).unwrap(), 6.0);
-        assert_eq!(*interp.interp(-3.75).unwrap().get(0).unwrap(), 1.625);
-        assert_eq!(*interp.interp(4.75).unwrap().get(0).unwrap(), 10.125);
+        assert_eq!(*interp.interp(-4.0).unwrap().first().unwrap(), 1.5);
+        assert_eq!(*interp.interp(5.0).unwrap().first().unwrap(), 10.5);
+        assert_eq!(*interp.interp(0.5).unwrap().first().unwrap(), 6.0);
+        assert_eq!(*interp.interp(-3.75).unwrap().first().unwrap(), 1.625);
+        assert_eq!(*interp.interp(4.75).unwrap().first().unwrap(), 10.125);
     }
 
     #[test]
@@ -414,10 +416,10 @@ mod test {
             .strategy(Linear { extrapolate: false })
             .build()
             .unwrap();
-        assert_eq!(*interp.interp(1.0).unwrap().get(0).unwrap(), 1.0);
-        assert_eq!(*interp.interp(512.0).unwrap().get(0).unwrap(), 1.0);
-        assert_eq!(*interp.interp(42.0).unwrap().get(0).unwrap(), 4.6875);
-        assert_eq!(*interp.interp(365.0).unwrap().get(0).unwrap(), 1.57421875);
+        assert_eq!(*interp.interp(1.0).unwrap().first().unwrap(), 1.0);
+        assert_eq!(*interp.interp(512.0).unwrap().first().unwrap(), 1.0);
+        assert_eq!(*interp.interp(42.0).unwrap().first().unwrap(), 4.6875);
+        assert_eq!(*interp.interp(365.0).unwrap().first().unwrap(), 1.57421875);
     }
 
     #[test]
@@ -427,8 +429,8 @@ mod test {
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
-        assert_eq!(*interp.interp(-1.0).unwrap().get(0).unwrap(), 2.0);
-        assert_eq!(*interp.interp(2.0).unwrap().get(0).unwrap(), 3.0);
+        assert_eq!(*interp.interp(-1.0).unwrap().first().unwrap(), 2.0);
+        assert_eq!(*interp.interp(2.0).unwrap().first().unwrap(), 3.0);
     }
 
     #[test]
@@ -500,11 +502,11 @@ mod test {
             .build()
             .unwrap();
         println!("{:?}", interp.interp(5.0).unwrap());
-        assert_eq!(*interp.interp(-4.0).unwrap().get(0).unwrap(), 10.0);
-        assert_eq!(*interp.interp(5.0).unwrap().get(0).unwrap(), 1.0);
-        assert_eq!(*interp.interp(0.0).unwrap().get(0).unwrap(), 6.0);
-        assert_eq!(*interp.interp(-3.5).unwrap().get(0).unwrap(), 9.5);
-        assert_eq!(*interp.interp(4.75).unwrap().get(0).unwrap(), 1.25);
+        assert_eq!(*interp.interp(-4.0).unwrap().first().unwrap(), 10.0);
+        assert_eq!(*interp.interp(5.0).unwrap().first().unwrap(), 1.0);
+        assert_eq!(*interp.interp(0.0).unwrap().first().unwrap(), 6.0);
+        assert_eq!(*interp.interp(-3.5).unwrap().first().unwrap(), 9.5);
+        assert_eq!(*interp.interp(4.75).unwrap().first().unwrap(), 1.25);
     }
 
     #[test]
@@ -522,7 +524,7 @@ mod test {
         let res = interp.interp(1.5).unwrap();
         assert_abs_diff_eq!(
             res,
-            array![[1.05, 1.1, 1.65, 2.2, 2.75]],
+            array![1.05, 1.1, 1.65, 2.2, 2.75],
             epsilon = f64::EPSILON
         );
         let array_array = interp
