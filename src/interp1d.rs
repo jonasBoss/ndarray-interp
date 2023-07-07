@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
-    Ix1, NdIndex, RemoveAxis, Slice,
+    Ix1, NdIndex, RemoveAxis, Slice, ArrayViewMut, Zip,
 };
 use num_traits::{Num, NumCast};
 use thiserror::Error;
@@ -57,9 +57,7 @@ where
     /// convinient interpolation function for interpolation at one point 
     /// when the data dimension is [`type@Ix1`]
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
-        match &self.strategy {
-            Linear { .. } => Ok(*self.linear(x)?.first().unwrap_or_else(|| unreachable!())),
-        }
+        Ok(*self.interp(x)?.first().unwrap_or_else(|| unreachable!()))
     }
 }
 
@@ -80,9 +78,9 @@ where
     /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar) 
     /// when the data dimension is [`type@Ix1`]
     pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
-        match &self.strategy {
-            Linear { .. } => self.linear(x),
-        }
+        let dim = self.data.raw_dim().remove_axis(Axis(0));
+        let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
+        self.interp_into(target.view_mut(), x).map(|_|target)
     }
 
     /// Calculate the interpolated values at all points in `xs`
@@ -166,7 +164,6 @@ where
             .for_each(|(new_axis, len)| {
                 *new_axis = *len;
             });
-
         let mut ys = Array::zeros(dim);
 
         // Perform interpolation for each index
@@ -189,8 +186,15 @@ where
         Ok(ys)
     }
 
+    #[inline]
+    fn interp_into(&self, target: ArrayViewMut<'_, Sd::Elem, D::Smaller>, x: Sx::Elem) -> Result<(), InterpolateError>{
+        match &self.strategy {
+            Linear { .. } => self.linear(target, x),
+        }
+    }
+
     /// the implementation for [Linear] strategy
-    fn linear(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
+    fn linear(&self, mut target: ArrayViewMut<'_, Sd::Elem, D::Smaller>, x: Sx::Elem) -> Result<(), InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -199,15 +203,27 @@ where
                 self.range
             )));
         }
+        
+        // find the relevant index
         let mut idx = self.get_left_index(x);
         if idx == self.data.len() - 1 {
             idx -= 1;
         }
-        Ok(Self::calc_frac_arr(
-            self.get_point(idx),
-            self.get_point(idx + 1),
-            x,
-        ))
+
+        // lookup the data
+        let (x1, y1) = self.get_point(idx);
+        let (x2, y2) = self.get_point(idx + 1);
+
+        // do interpolation
+        Zip::from(&mut target)
+            .and(y1)
+            .and(y2)
+            .for_each(
+                |t, &y1, &y2|{
+                    *t = Self::calc_frac((x1, y1), (x2, y2), x);
+                }
+            );
+        Ok(())
     }
 
     /// get x,data coordinate at given index
@@ -230,22 +246,6 @@ where
         let b = y1;
         let m = (y2 - y1) / (x2 - x1);
         m * (x - x1) + b
-    }
-
-    /// Same thing as [`.calc_frac`] but elementwise over the ArrayView
-    fn calc_frac_arr<Dim>(
-        (x1, y1): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
-        (x2, y2): (Sx::Elem, ArrayView<Sd::Elem, Dim>),
-        x: Sx::Elem,
-    ) -> Array<Sd::Elem, Dim>
-    where
-        Dim: Dimension,
-    {
-        let mut res = y2.to_owned();
-        res.zip_mut_with(&y1, |y2, y1| {
-            *y2 = Self::calc_frac((x1, *y1), (x2, *y2), x);
-        });
-        res
     }
 
     /// the index of known value left of, or at x
