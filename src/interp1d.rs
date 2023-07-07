@@ -1,8 +1,8 @@
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
-    Ix1, NdIndex, RemoveAxis, Slice, ArrayViewMut, Zip,
+    s, Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
+    IntoDimension, Ix1, NdIndex, RemoveAxis, Slice, Zip,
 };
 use num_traits::{Num, NumCast};
 use thiserror::Error;
@@ -54,7 +54,7 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
 {
-    /// convinient interpolation function for interpolation at one point 
+    /// convinient interpolation function for interpolation at one point
     /// when the data dimension is [`type@Ix1`]
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         Ok(*self.interp(x)?.first().unwrap_or_else(|| unreachable!()))
@@ -74,28 +74,28 @@ where
     }
 
     /// Calculate the interpolated values at `x`.
-    /// **returns** the interpolated data in an array one dimension smaller than 
-    /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar) 
+    /// **returns** the interpolated data in an array one dimension smaller than
+    /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar)
     /// when the data dimension is [`type@Ix1`]
     pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         let dim = self.data.raw_dim().remove_axis(Axis(0));
         let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
-        self.interp_into(target.view_mut(), x).map(|_|target)
+        self.interp_into(target.view_mut(), x).map(|_| target)
     }
 
     /// Calculate the interpolated values at all points in `xs`
-    /// 
+    ///
     /// ```rust
     /// # use rs_interp::*;
     /// # use ndarray::*;
     /// # use InterpolationStrategy::*;
     /// # use approx::*;
-    /// 
+    ///
     /// let data =     array![0.0,  0.5, 1.0 ];
     /// let x =        array![0.0,  1.0, 2.0 ];
     /// let query =    array![0.5,  1.0, 1.5 ];
     /// let expected = array![0.25, 0.5, 0.75];
-    /// 
+    ///
     /// let interpolator = Interp1DBuilder::new(data)
     ///     .x(x)
     ///     .strategy(Linear{extrapolate: false})
@@ -103,18 +103,18 @@ where
     /// let result = interpolator.interp_array(&query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
     /// ```
-    /// 
+    ///
     /// # Dimensions
     /// given the data dimension is `N` and the dimension of `xs` is `M`
-    /// the return array will have dimension `M + N - 1` where the first 
+    /// the return array will have dimension `M + N - 1` where the first
     /// `M` dimensions correspond to the dimension in `xs`.
-    /// 
+    ///
     /// ```rust
     /// # use rs_interp::*;
     /// # use ndarray::*;
     /// # use InterpolationStrategy::*;
     /// # use approx::*;
-    /// 
+    ///
     /// // data has 2 dimension:
     /// let data = array![
     ///     [0.0, 2.0],
@@ -122,7 +122,7 @@ where
     ///     [1.0, 3.0],
     /// ];
     /// let x = array![
-    ///     0.0, 
+    ///     0.0,
     ///     1.0,
     ///     2.0,
     /// ];
@@ -136,7 +136,7 @@ where
     ///     [[0.0, 2.0], [0.25, 2.25]], // result for x=[0.0, 0.5]
     ///     [[0.5, 2.5], [0.75, 2.75]], // result for x=[1.0, 1.5]
     /// ];
-    /// 
+    ///
     /// let interpolator = Interp1DBuilder::new(data)
     ///     .x(x)
     ///     .strategy(Linear{extrapolate: false})
@@ -167,11 +167,9 @@ where
         let mut ys = Array::zeros(dim);
 
         // Perform interpolation for each index
-        for (index, x) in xs.indexed_iter() {
+        for (index, &x) in xs.indexed_iter() {
             let current_dim = index.clone().into_dimension();
-            let interpolated_value = self.interp(*x)?;
-
-            let mut subview =
+            let subview =
                 ys.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| match current_dim
                     .as_array_view()
                     .get(nr)
@@ -179,22 +177,35 @@ where
                     Some(idx) => Slice::from(*idx..*idx + 1),
                     None => Slice::from(..),
                 });
-            // Assign the interpolated value to the subview
-            subview.assign(&interpolated_value);
+
+            self.interp_into(
+                subview
+                    .into_shape(self.data.raw_dim().remove_axis(Axis(0)))
+                    .unwrap_or_else(|_| unreachable!()),
+                x,
+            )?;
         }
 
         Ok(ys)
     }
 
     #[inline]
-    fn interp_into(&self, target: ArrayViewMut<'_, Sd::Elem, D::Smaller>, x: Sx::Elem) -> Result<(), InterpolateError>{
+    fn interp_into(
+        &self,
+        target: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
+        x: Sx::Elem,
+    ) -> Result<(), InterpolateError> {
         match &self.strategy {
             Linear { .. } => self.linear(target, x),
         }
     }
 
     /// the implementation for [Linear] strategy
-    fn linear(&self, mut target: ArrayViewMut<'_, Sd::Elem, D::Smaller>, x: Sx::Elem) -> Result<(), InterpolateError> {
+    fn linear(
+        &self,
+        mut target: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
+        x: Sx::Elem,
+    ) -> Result<(), InterpolateError> {
         if matches!(self.strategy, Linear { extrapolate: false })
             && !(self.range.0 <= x && x <= self.range.1)
         {
@@ -203,7 +214,7 @@ where
                 self.range
             )));
         }
-        
+
         // find the relevant index
         let mut idx = self.get_left_index(x);
         if idx == self.data.len() - 1 {
@@ -218,11 +229,9 @@ where
         Zip::from(&mut target)
             .and(y1)
             .and(y2)
-            .for_each(
-                |t, &y1, &y2|{
-                    *t = Self::calc_frac((x1, y1), (x2, y2), x);
-                }
-            );
+            .for_each(|t, &y1, &y2| {
+                *t = Self::calc_frac((x1, y1), (x2, y2), x);
+            });
         Ok(())
     }
 
