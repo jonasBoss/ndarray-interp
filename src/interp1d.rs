@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     s, Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix1, NdIndex, RemoveAxis, Slice, Zip,
+    IntoDimension, Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice, Zip,
 };
 use num_traits::{Num, NumCast};
 use thiserror::Error;
@@ -61,6 +61,18 @@ where
     }
 }
 
+impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    D: Dimension,
+{
+    /// Get the [Interp1DBuilder]
+    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D> {
+        Interp1DBuilder::new(data)
+    }
+}
+
 impl<Sd, Sx, D> Interp1D<Sd, Sx, D>
 where
     Sd: Data,
@@ -68,11 +80,6 @@ where
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
-    /// Get the [Interp1DBuilder]
-    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, Sx, D> {
-        Interp1DBuilder::new(data)
-    }
-
     /// Calculate the interpolated values at `x`.
     /// **returns** the interpolated data in an array one dimension smaller than
     /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar)
@@ -348,11 +355,10 @@ where
     strategy: InterpolationStrategy,
 }
 
-impl<Sd, Sx, D> Interp1DBuilder<Sd, Sx, D>
+impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
-    Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
 {
     /// Create a new [Interp1DBuilder] and provide the data to interpolate.
@@ -365,13 +371,28 @@ where
             strategy: Linear { extrapolate: false },
         }
     }
+}
 
+impl<Sd, Sx, D> Interp1DBuilder<Sd, Sx, D>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sx: Data<Elem = Sd::Elem>,
+    D: Dimension,
+{
     /// Add an custom x axis for the data. The axis needs to have the same lenght
     /// and store the same Type as the data.
     /// If the x axis is not set the index `0..y.len()` is used
-    pub fn x(mut self, x: ArrayBase<Sx, Ix1>) -> Self {
-        self.x = Some(x);
-        self
+    pub fn x<NewSx>(self, x: ArrayBase<NewSx, Ix1>) -> Interp1DBuilder<Sd, NewSx, D>
+    where
+        NewSx: Data<Elem = Sd::Elem>,
+    {
+        let Interp1DBuilder { data, strategy, .. } = self;
+        Interp1DBuilder {
+            x: Some(x),
+            data,
+            strategy,
+        }
     }
 
     /// Set the [InterpolationStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
@@ -442,7 +463,6 @@ mod test {
     use approx::assert_abs_diff_eq;
     use ndarray::array;
     use ndarray::s;
-    use ndarray::OwnedRepr;
     use num_traits::NumCast;
 
     use super::Interp1D;
@@ -459,10 +479,9 @@ mod test {
 
     #[test]
     fn interp_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>, _> =
-            Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
-                .build()
-                .unwrap();
+        let interp = Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
+            .build()
+            .unwrap();
         assert_eq!(*interp.interp(0.0).unwrap().first().unwrap(), 1.5);
         assert_eq!(*interp.interp(9.0).unwrap().first().unwrap(), 10.5);
         assert_eq!(*interp.interp(4.5).unwrap().first().unwrap(), 6.0);
@@ -472,7 +491,7 @@ mod test {
 
     #[test]
     fn extrapolate_y_only() {
-        let interp: Interp1D<_, OwnedRepr<_>, _> = Interp1D::builder(array![1.0, 2.0, 1.5])
+        let interp = Interp1D::builder(array![1.0, 2.0, 1.5])
             .strategy(Linear { extrapolate: true })
             .build()
             .unwrap();
@@ -533,8 +552,7 @@ mod test {
 
     #[test]
     fn interp_y_only_out_of_bounds() {
-        let interp: Interp1D<_, OwnedRepr<_>, _> =
-            Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
+        let interp = Interp1D::builder(array![1.0, 2.0, 3.0]).build().unwrap();
         assert!(matches!(
             interp.interp(-0.1),
             Err(InterpolateError::OutOfBounds(_))
@@ -565,7 +583,7 @@ mod test {
     #[test]
     fn interp_builder_errors() {
         assert!(matches!(
-            Interp1DBuilder::<_, OwnedRepr<_>, _>::new(array![1]).build(),
+            Interp1DBuilder::new(array![1]).build(),
             Err(BuilderError::NotEnoughData(_))
         ));
         assert!(matches!(
