@@ -9,29 +9,36 @@ use thiserror::Error;
 
 use crate::vector_extensions::{Monotonic, VectorExtensions};
 
+/// Strategys for interpolating data along one axis
 #[derive(Debug)]
-pub enum InterpolationStrategy {
+pub enum Interp1DStrategy {
     Linear { extrapolate: bool },
 }
-use InterpolationStrategy::*;
+use Interp1DStrategy::*;
 
+/// Errors during Interpolator creation
 #[derive(Debug, Error)]
 pub enum BuilderError {
+    /// Insufficient data for the chosen interpolation strategy
     #[error("{0}")]
     NotEnoughData(String),
+    /// A interpolation axis is not strict monotonic rising
     #[error("{0}")]
     Monotonic(String),
+    /// The lengths of interpolation axis and the
+    /// corresponding data axis do not match
     #[error("{0}")]
     AxisLenght(String),
 }
 
+/// Errors during Interpolation
 #[derive(Debug, Error)]
 pub enum InterpolateError {
     #[error("{0}")]
     OutOfBounds(String),
 }
 
-/// One dimensional Interpolator
+/// One dimensional interpolator
 #[derive(Debug)]
 pub struct Interp1D<Sd, Sx, D>
 where
@@ -44,7 +51,7 @@ where
     /// if x is None, the x values are assumed to be the index of data
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
-    strategy: InterpolationStrategy,
+    strategy: Interp1DStrategy,
     range: (Sx::Elem, Sx::Elem),
 }
 
@@ -56,6 +63,23 @@ where
 {
     /// convinient interpolation function for interpolation at one point
     /// when the data dimension is [`type@Ix1`]
+    ///
+    /// ```rust
+    /// # use rs_interp::*;
+    /// # use ndarray::*;
+    /// # use Interp1DStrategy::*;
+    /// # use approx::*;
+    ///
+    /// // data has 2 dimension:
+    /// let data = array![1.0, 1.5, 2.0];
+    /// let x =    array![1.0, 2.0, 3.0];
+    /// let query = 1.5;
+    /// let expected = 1.25;
+    ///
+    /// let interpolator = Interp1DBuilder::new(data).x(x).build().unwrap();
+    /// let result = interpolator.interp_scalar(query).unwrap();
+    /// # assert_eq!(result, expected);
+    /// ```
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         Ok(*self.interp(x)?.first().unwrap_or_else(|| unreachable!()))
     }
@@ -82,7 +106,29 @@ where
 {
     /// Calculate the interpolated values at `x`.
     /// **returns** the interpolated data in an array one dimension smaller than
-    /// the data dimension. Concider using [`interp_scalar(x)`](Interp1D::interp_scalar)
+    /// the data dimension.
+    ///
+    /// ```rust
+    /// # use rs_interp::*;
+    /// # use ndarray::*;
+    /// # use Interp1DStrategy::*;
+    /// # use approx::*;
+    ///
+    /// // data has 2 dimension:
+    /// let data = array![
+    ///     [0.0, 2.0, 4.0],
+    ///     [0.5, 2.5, 3.5],
+    ///     [1.0, 3.0, 3.0],
+    /// ];
+    /// let query = 0.5;
+    /// let expected = array![0.25, 2.25, 3.75];
+    ///
+    /// let interpolator = Interp1DBuilder::new(data).build().unwrap();
+    /// let result = interpolator.interp(query).unwrap();
+    /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
+    /// ```
+    ///
+    /// Concider using [`interp_scalar(x)`](Interp1D::interp_scalar)
     /// when the data dimension is [`type@Ix1`]
     pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         let dim = self.data.raw_dim().remove_axis(Axis(0));
@@ -95,7 +141,7 @@ where
     /// ```rust
     /// # use rs_interp::*;
     /// # use ndarray::*;
-    /// # use InterpolationStrategy::*;
+    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     ///
     /// let data =     array![0.0,  0.5, 1.0 ];
@@ -119,7 +165,7 @@ where
     /// ```rust
     /// # use rs_interp::*;
     /// # use ndarray::*;
-    /// # use InterpolationStrategy::*;
+    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     ///
     /// // data has 2 dimension:
@@ -352,7 +398,7 @@ where
 {
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
-    strategy: InterpolationStrategy,
+    strategy: Interp1DStrategy,
 }
 
 impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D>
@@ -363,7 +409,8 @@ where
 {
     /// Create a new [Interp1DBuilder] and provide the data to interpolate.
     /// When nothing else is configured [Interp1DBuilder::build] will create an Interpolator using
-    /// Linear Interpolation without extrapolation. As x axis the index to the data would be used.
+    /// Linear Interpolation without extrapolation. As x axis the index to the data will be used.
+    /// On multidimensional data interpolation happens along the first axis.
     pub fn new(data: ArrayBase<Sd, D>) -> Self {
         Interp1DBuilder {
             x: None,
@@ -382,7 +429,7 @@ where
 {
     /// Add an custom x axis for the data. The axis needs to have the same lenght
     /// and store the same Type as the data.
-    /// If the x axis is not set the index `0..y.len()` is used
+    /// If the x axis is not set the index `0..data.len() - 1` is used
     pub fn x<NewSx>(self, x: ArrayBase<NewSx, Ix1>) -> Interp1DBuilder<Sd, NewSx, D>
     where
         NewSx: Data<Elem = Sd::Elem>,
@@ -396,7 +443,7 @@ where
     }
 
     /// Set the [InterpolationStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
-    pub fn strategy(mut self, strategy: InterpolationStrategy) -> Self {
+    pub fn strategy(mut self, strategy: Interp1DStrategy) -> Self {
         self.strategy = strategy;
         self
     }
@@ -467,7 +514,7 @@ mod test {
 
     use super::Interp1D;
     use super::Interp1DBuilder;
-    use super::InterpolationStrategy::*;
+    use super::Interp1DStrategy::*;
     use crate::BuilderError;
     use crate::InterpolateError;
 

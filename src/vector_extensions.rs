@@ -1,5 +1,6 @@
 use ndarray::{ArrayBase, Data, Ix1};
 
+/// Helper methods for one dimensional arrays
 pub trait VectorExtensions {
     /// get the monotonic property of the vector
     fn monotonic_prop(&self) -> Monotonic;
