@@ -69,8 +69,6 @@ where
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
-    ///
-    /// // data has 2 dimension:
     /// let data = array![1.0, 1.5, 2.0];
     /// let x =    array![1.0, 2.0, 3.0];
     /// let query = 1.5;
@@ -105,7 +103,7 @@ where
     D: Dimension + RemoveAxis,
 {
     /// Calculate the interpolated values at `x`.
-    /// **returns** the interpolated data in an array one dimension smaller than
+    /// Returns the interpolated data in an array one dimension smaller than
     /// the data dimension.
     ///
     /// ```rust
@@ -113,7 +111,6 @@ where
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
-    ///
     /// // data has 2 dimension:
     /// let data = array![
     ///     [0.0, 2.0, 4.0],
@@ -143,7 +140,6 @@ where
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
-    ///
     /// let data =     array![0.0,  0.5, 1.0 ];
     /// let x =        array![0.0,  1.0, 2.0 ];
     /// let query =    array![0.5,  1.0, 1.5 ];
@@ -160,14 +156,13 @@ where
     /// # Dimensions
     /// given the data dimension is `N` and the dimension of `xs` is `M`
     /// the return array will have dimension `M + N - 1` where the first
-    /// `M` dimensions correspond to the dimension in `xs`.
+    /// `M` dimensions correspond to the dimensions of `xs`.
     ///
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
-    ///
     /// // data has 2 dimension:
     /// let data = array![
     ///     [0.0, 2.0],
@@ -388,6 +383,10 @@ where
 }
 
 /// Create and configure a [Interp1D] Interpolator.
+/// # Default configuration
+/// In the default configuration the interpolation strategy is [`Linear{extrapolate: false}`].
+/// The data will be interpolated along [`Axis(0)`] (currently this can not be changed).
+/// The index to `Axis(0)` of the data will be used as x values.
 #[derive(Debug)]
 pub struct Interp1DBuilder<Sd, Sx, D>
 where
@@ -428,7 +427,7 @@ where
     D: Dimension,
 {
     /// Add an custom x axis for the data. The axis needs to have the same lenght
-    /// and store the same Type as the data.
+    /// and store the same Type as the data. `x`  must be strict monotonic rising.
     /// If the x axis is not set the index `0..data.len() - 1` is used
     pub fn x<NewSx>(self, x: ArrayBase<NewSx, Ix1>) -> Interp1DBuilder<Sd, NewSx, D>
     where
@@ -442,7 +441,7 @@ where
         }
     }
 
-    /// Set the [InterpolationStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
+    /// Set the [Interp1DStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
     pub fn strategy(mut self, strategy: Interp1DStrategy) -> Self {
         self.strategy = strategy;
         self
