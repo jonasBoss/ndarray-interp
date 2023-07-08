@@ -65,7 +65,7 @@ where
     /// when the data dimension is [`type@Ix1`]
     ///
     /// ```rust
-    /// # use rs_interp::*;
+    /// # use ndarray_interp::*;
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
@@ -109,7 +109,7 @@ where
     /// the data dimension.
     ///
     /// ```rust
-    /// # use rs_interp::*;
+    /// # use ndarray_interp::*;
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
@@ -139,7 +139,7 @@ where
     /// Calculate the interpolated values at all points in `xs`
     ///
     /// ```rust
-    /// # use rs_interp::*;
+    /// # use ndarray_interp::*;
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
@@ -163,7 +163,7 @@ where
     /// `M` dimensions correspond to the dimension in `xs`.
     ///
     /// ```rust
-    /// # use rs_interp::*;
+    /// # use ndarray_interp::*;
     /// # use ndarray::*;
     /// # use Interp1DStrategy::*;
     /// # use approx::*;
