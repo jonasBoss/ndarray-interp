@@ -1,20 +1,16 @@
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice, Zip,
+    s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
+    Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice, Zip,
 };
 use num_traits::{Num, NumCast};
 use thiserror::Error;
 
 use crate::vector_extensions::{Monotonic, VectorExtensions};
 
-/// Strategys for interpolating data along one axis
-#[derive(Debug)]
-pub enum Interp1DStrategy {
-    Linear { extrapolate: bool },
-}
-use Interp1DStrategy::*;
+mod strategies;
+pub use self::strategies::*;
 
 /// Errors during Interpolator creation
 #[derive(Debug, Error)]
@@ -29,6 +25,8 @@ pub enum BuilderError {
     /// corresponding data axis do not match
     #[error("{0}")]
     AxisLenght(String),
+    #[error("{0}")]
+    DimensionError(String),
 }
 
 /// Errors during Interpolation
@@ -40,26 +38,28 @@ pub enum InterpolateError {
 
 /// One dimensional interpolator
 #[derive(Debug)]
-pub struct Interp1D<Sd, Sx, D>
+pub struct Interp1D<Sd, Sx, D, Strat>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
+    Strat: Strategy<Sd, Sx, D>,
 {
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of data
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
-    strategy: Interp1DStrategy,
+    strategy: Strat,
     range: (Sx::Elem, Sx::Elem),
 }
 
-impl<Sd, Sx> Interp1D<Sd, Sx, Ix1>
+impl<Sd, Sx, Strat> Interp1D<Sd, Sx, Ix1, Strat>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
+    Strat: Strategy<Sd, Sx, Ix1>,
 {
     /// convinient interpolation function for interpolation at one point
     /// when the data dimension is [`type@Ix1`]
@@ -67,7 +67,6 @@ where
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray::*;
-    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     /// let data = array![1.0, 1.5, 2.0];
     /// let x =    array![1.0, 2.0, 3.0];
@@ -83,24 +82,25 @@ where
     }
 }
 
-impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D>
+impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
 {
     /// Get the [Interp1DBuilder]
-    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D> {
+    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear> {
         Interp1DBuilder::new(data)
     }
 }
 
-impl<Sd, Sx, D> Interp1D<Sd, Sx, D>
+impl<Sd, Sx, D, Strat> Interp1D<Sd, Sx, D, Strat>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
+    Strat: Strategy<Sd, Sx, D>,
 {
     /// Calculate the interpolated values at `x`.
     /// Returns the interpolated data in an array one dimension smaller than
@@ -109,7 +109,6 @@ where
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray::*;
-    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     /// // data has 2 dimension:
     /// let data = array![
@@ -130,7 +129,9 @@ where
     pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         let dim = self.data.raw_dim().remove_axis(Axis(0));
         let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
-        self.interp_into(target.view_mut(), x).map(|_| target)
+        self.strategy
+            .interp_into(self, target.view_mut(), x)
+            .map(|_| target)
     }
 
     /// Calculate the interpolated values at all points in `xs`
@@ -138,7 +139,6 @@ where
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray::*;
-    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     /// let data =     array![0.0,  0.5, 1.0 ];
     /// let x =        array![0.0,  1.0, 2.0 ];
@@ -161,7 +161,6 @@ where
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray::*;
-    /// # use Interp1DStrategy::*;
     /// # use approx::*;
     /// // data has 2 dimension:
     /// let data = array![
@@ -226,7 +225,8 @@ where
                     None => Slice::from(..),
                 });
 
-            self.interp_into(
+            self.strategy.interp_into(
+                self,
                 subview
                     .into_shape(self.data.raw_dim().remove_axis(Axis(0)))
                     .unwrap_or_else(|_| unreachable!()),
@@ -235,52 +235,6 @@ where
         }
 
         Ok(ys)
-    }
-
-    #[inline]
-    fn interp_into(
-        &self,
-        target: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
-        x: Sx::Elem,
-    ) -> Result<(), InterpolateError> {
-        match &self.strategy {
-            Linear { .. } => self.linear(target, x),
-        }
-    }
-
-    /// the implementation for [Linear] strategy
-    fn linear(
-        &self,
-        mut target: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
-        x: Sx::Elem,
-    ) -> Result<(), InterpolateError> {
-        if matches!(self.strategy, Linear { extrapolate: false })
-            && !(self.range.0 <= x && x <= self.range.1)
-        {
-            return Err(InterpolateError::OutOfBounds(format!(
-                "x = {x:#?} is not in range of {:#?}",
-                self.range
-            )));
-        }
-
-        // find the relevant index
-        let mut idx = self.get_left_index(x);
-        if idx == self.data.len() - 1 {
-            idx -= 1;
-        }
-
-        // lookup the data
-        let (x1, y1) = self.get_point(idx);
-        let (x2, y2) = self.get_point(idx + 1);
-
-        // do interpolation
-        Zip::from(&mut target)
-            .and(y1)
-            .and(y2)
-            .for_each(|t, &y1, &y2| {
-                *t = Self::calc_frac((x1, y1), (x2, y2), x);
-            });
-        Ok(())
     }
 
     /// get x,data coordinate at given index
@@ -388,7 +342,7 @@ where
 /// The data will be interpolated along [`Axis(0)`] (currently this can not be changed).
 /// The index to `Axis(0)` of the data will be used as x values.
 #[derive(Debug)]
-pub struct Interp1DBuilder<Sd, Sx, D>
+pub struct Interp1DBuilder<Sd, Sx, D, Strat>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
@@ -397,10 +351,10 @@ where
 {
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
-    strategy: Interp1DStrategy,
+    strategy: Option<Strat>,
 }
 
-impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D>
+impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
@@ -414,22 +368,23 @@ where
         Interp1DBuilder {
             x: None,
             data,
-            strategy: Linear { extrapolate: false },
+            strategy: Some(Linear { extrapolate: false }),
         }
     }
 }
 
-impl<Sd, Sx, D> Interp1DBuilder<Sd, Sx, D>
+impl<Sd, Sx, D, Strat> Interp1DBuilder<Sd, Sx, D, Strat>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
+    Strat: StrategyBuilder<Sd, Sx, D>,
 {
     /// Add an custom x axis for the data. The axis needs to have the same lenght
     /// and store the same Type as the data. `x`  must be strict monotonic rising.
     /// If the x axis is not set the index `0..data.len() - 1` is used
-    pub fn x<NewSx>(self, x: ArrayBase<NewSx, Ix1>) -> Interp1DBuilder<Sd, NewSx, D>
+    pub fn x<NewSx>(self, x: ArrayBase<NewSx, Ix1>) -> Interp1DBuilder<Sd, NewSx, D, Strat>
     where
         NewSx: Data<Elem = Sd::Elem>,
     {
@@ -442,24 +397,32 @@ where
     }
 
     /// Set the [Interp1DStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
-    pub fn strategy(mut self, strategy: Interp1DStrategy) -> Self {
-        self.strategy = strategy;
-        self
+    pub fn strategy<NewStrat>(self, strategy: NewStrat) -> Interp1DBuilder<Sd, Sx, D, NewStrat>
+    where
+        NewStrat: StrategyBuilder<Sd, Sx, D>,
+    {
+        let Interp1DBuilder { x, data, .. } = self;
+        Interp1DBuilder {
+            x,
+            data,
+            strategy: Some(strategy),
+        }
     }
 
     /// Validate input data and create the configured [Interp1D]
-    pub fn build(self) -> Result<Interp1D<Sd, Sx, D>, BuilderError> {
-        match &self.strategy {
-            Linear { .. } => {
-                if self.data.len() < 2 {
-                    Err(BuilderError::NotEnoughData(
-                        "Linear Interpolation needs at least two data points".into(),
-                    ))
-                } else {
-                    Ok(())
-                }
-            }
-        }?;
+    pub fn build(mut self) -> Result<Interp1D<Sd, Sx, D, Strat::FinishedStrat>, BuilderError> {
+        let &len = self
+            .data
+            .raw_dim()
+            .as_array_view()
+            .get(0)
+            .ok_or(BuilderError::DimensionError("data dimension is 0".into()))?;
+        if len < Strat::MINIMUM_DATA_LENGHT {
+            return Err(BuilderError::NotEnoughData(format!(
+                "The chosen Interpolation strategy needs at least {} data points",
+                Strat::MINIMUM_DATA_LENGHT
+            )));
+        };
 
         if let Some(x) = &self.x {
             match x.monotonic_prop() {
@@ -476,14 +439,12 @@ where
                 .unwrap_or_else(|| unreachable!())
                 != x.len()
             {
-                Err(BuilderError::AxisLenght(format!(
+                return Err(BuilderError::AxisLenght(format!(
                     "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
                     x.len(),
                     self.data.len()
-                )))
-            } else {
-                Ok(())
-            }?;
+                )));
+            };
         }
         let range = match &self.x {
             Some(x) => (
@@ -495,10 +456,18 @@ where
                 NumCast::from(self.data.len() - 1).unwrap_or_else(|| unimplemented!()),
             ),
         };
+
+        let strategy = self
+            .strategy
+            .take()
+            .unwrap_or_else(|| {
+                unreachable!("this is the only place where the option is set to None")
+            })
+            .build(&self)?;
         Ok(Interp1D {
             x: self.x,
             data: self.data,
-            strategy: self.strategy,
+            strategy: strategy,
             range,
         })
     }
@@ -513,7 +482,7 @@ mod test {
 
     use super::Interp1D;
     use super::Interp1DBuilder;
-    use super::Interp1DStrategy::*;
+    use crate::interp1d::strategies::Linear;
     use crate::BuilderError;
     use crate::InterpolateError;
 
