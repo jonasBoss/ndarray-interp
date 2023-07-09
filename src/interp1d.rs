@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
-    Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice, Zip,
+    Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{Num, NumCast};
 use thiserror::Error;
@@ -467,7 +467,7 @@ where
         Ok(Interp1D {
             x: self.x,
             data: self.data,
-            strategy: strategy,
+            strategy,
             range,
         })
     }

@@ -53,7 +53,7 @@ where
     type FinishedStrat = Linear;
     fn build(
         self,
-        builder: &Interp1DBuilder<Sd, Sx, D, Self>,
+        _builder: &Interp1DBuilder<Sd, Sx, D, Self>,
     ) -> Result<Self::FinishedStrat, BuilderError> {
         Ok(self)
     }
