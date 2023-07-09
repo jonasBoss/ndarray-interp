@@ -3,7 +3,8 @@ use std::{fmt::Debug, ops::Sub};
 use ndarray::{ArrayViewMut, Data, Dimension, RemoveAxis, Zip};
 use num_traits::{Num, NumCast};
 
-use crate::{BuilderError, Interp1D, Interp1DBuilder, InterpolateError};
+use super::{Interp1D, Interp1DBuilder};
+use crate::{BuilderError, InterpolateError};
 
 pub trait StrategyBuilder<Sd, Sx, D>
 where

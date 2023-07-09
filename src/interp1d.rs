@@ -5,36 +5,14 @@ use ndarray::{
     Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{Num, NumCast};
-use thiserror::Error;
 
-use crate::vector_extensions::{Monotonic, VectorExtensions};
+use crate::{
+    vector_extensions::{Monotonic, VectorExtensions},
+    BuilderError, InterpolateError,
+};
 
 mod strategies;
-pub use self::strategies::*;
-
-/// Errors during Interpolator creation
-#[derive(Debug, Error)]
-pub enum BuilderError {
-    /// Insufficient data for the chosen interpolation strategy
-    #[error("{0}")]
-    NotEnoughData(String),
-    /// A interpolation axis is not strict monotonic rising
-    #[error("{0}")]
-    Monotonic(String),
-    /// The lengths of interpolation axis and the
-    /// corresponding data axis do not match
-    #[error("{0}")]
-    AxisLenght(String),
-    #[error("{0}")]
-    DimensionError(String),
-}
-
-/// Errors during Interpolation
-#[derive(Debug, Error)]
-pub enum InterpolateError {
-    #[error("{0}")]
-    OutOfBounds(String),
-}
+pub use strategies::*;
 
 /// One dimensional interpolator
 #[derive(Debug)]
@@ -66,6 +44,7 @@ where
     ///
     /// ```rust
     /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
     /// # use ndarray::*;
     /// # use approx::*;
     /// let data = array![1.0, 1.5, 2.0];
@@ -108,6 +87,7 @@ where
     ///
     /// ```rust
     /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
     /// # use ndarray::*;
     /// # use approx::*;
     /// // data has 2 dimension:
@@ -138,6 +118,7 @@ where
     ///
     /// ```rust
     /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
     /// # use ndarray::*;
     /// # use approx::*;
     /// let data =     array![0.0,  0.5, 1.0 ];
@@ -160,6 +141,7 @@ where
     ///
     /// ```rust
     /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
     /// # use ndarray::*;
     /// # use approx::*;
     /// // data has 2 dimension:
