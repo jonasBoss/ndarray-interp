@@ -16,6 +16,9 @@ where
 {
     const MINIMUM_DATA_LENGHT: usize;
     type FinishedStrat: Strategy<Sd, Sx, D>;
+
+    /// initialize the strategy by validating data and
+    /// possibly calculating coefficients
     fn build(
         self,
         builder: &Interp1DBuilder<Sd, Sx, D, Self>,
@@ -30,6 +33,11 @@ where
     D: Dimension,
     Self: Sized,
 {
+    /// Interpolate the at position x into the target array.
+    /// This is used internally by [`Interp1D`].
+    ///
+    /// When usde outside of [`Interp1D`] the behaviour is
+    /// undefined, possibly causing a panic.
     fn interp_into(
         &self,
         interpolator: &Interp1D<Sd, Sx, D, Self>,
@@ -38,6 +46,7 @@ where
     ) -> Result<(), InterpolateError>;
 }
 
+/// Linear Interpolation Strategy
 #[derive(Debug)]
 pub struct Linear {
     pub extrapolate: bool,

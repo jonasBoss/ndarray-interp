@@ -378,7 +378,8 @@ where
         }
     }
 
-    /// Set the [Interp1DStrategy]. By default [Linear] with `Linear{extrapolate: false}` is used.
+    /// Set the interpolation strategy by providing a [StrategyBuilder].
+    /// By default [Linear] with `Linear{extrapolate: false}` is used.
     pub fn strategy<NewStrat>(self, strategy: NewStrat) -> Interp1DBuilder<Sd, Sx, D, NewStrat>
     where
         NewStrat: StrategyBuilder<Sd, Sx, D>,

@@ -1,7 +1,7 @@
 //! The ndarray-interp crate provides interpolation algorithms
 //! for interpolating _n_-dimesional data.
 //!
-//! [Interp1D] provides functionality to interpolate _n_-dimensional
+//! [interp1d::Interp1D] provides functionality to interpolate _n_-dimensional
 //! arrays along the first axis. The documentation of the different
 //! interpolation methods provides examples.
 use thiserror::Error;
