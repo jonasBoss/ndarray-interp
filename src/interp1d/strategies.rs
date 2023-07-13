@@ -347,10 +347,34 @@ where
 {
     fn interp_into(
         &self,
-        interpolator: &Interp1D<Sd, Sx, D, Self>,
+        interp: &Interp1D<Sd, Sx, D, Self>,
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-        todo!()
+
+        if !(interp.range.0 <= x && x <= interp.range.1) {
+            return Err(InterpolateError::OutOfBounds(format!(
+                "x = {x:#?} is not in range of {:#?}",
+                interp.range
+            )));
+        }
+
+        let idx = interp.get_left_index(x);
+        let (x_left, data_left) = interp.get_point(idx);
+        let (x_right, data_right) = interp.get_point(idx+1);
+        let a_left = self.a.index_axis(Axis(0), idx);
+        let b_left = self.b.index_axis(Axis(0), idx);
+        let one: Sd::Elem = cast(1.0).unwrap_or_else(||unimplemented!());
+
+        let t = (x - x_left) / (x_right - x_left);
+        Zip::from(target)
+            .and(data_left)
+            .and(data_right)
+            .and(a_left)
+            .and(b_left)
+            .for_each(|y, &y_left, &y_right, &a_left, &b_left|{
+                *y = (one - t) * y_left + t * y_right + t * (one -t)*(a_left*(one-t)+b_left*t);
+            });
+        Ok(())
     }
 }
