@@ -1,11 +1,11 @@
 use std::{
     fmt::Debug,
-    ops::{Add, Div, Sub},
+    ops::{Add, Sub},
 };
 
 use ndarray::{
-    array, s, Array, Array1, ArrayBase, ArrayViewMut, AssignElem, Axis, Data, Dimension, Ix1,
-    RemoveAxis, ScalarOperand, Slice, Zip,
+    s, Array, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis, ScalarOperand,
+    Slice, Zip,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -138,12 +138,12 @@ where
         self,
         builder: &Interp1DBuilder<Sd, Sx, D, Self>,
     ) -> Result<Self::FinishedStrat, BuilderError> {
-        let dim = builder.data.raw_dim().clone();
+        let dim = builder.data.raw_dim();
         let len = *dim.as_array_view().get(0).unwrap_or_else(|| unreachable!());
         let (a, b) = match builder.x.as_ref() {
             Some(x) => self.calc_coefficients(x, &builder.data),
             None => {
-                let x = Array::from_iter((0..len).into_iter().map(|n| {
+                let x = Array::from_iter((0..len).map(|n| {
                     cast(n).unwrap_or_else(|| {
                         unimplemented!("casting from usize to a number should always work")
                     })
@@ -168,9 +168,9 @@ impl CubicSpline {
         Sx: Data<Elem = Sd::Elem>,
         D: Dimension + RemoveAxis,
     {
-        let dim = data.raw_dim().clone();
+        let dim = data.raw_dim();
         let len = dim[0];
-        let mut a_b_dim = data.raw_dim().clone();
+        let mut a_b_dim = data.raw_dim();
         a_b_dim[0] -= 1;
 
         // we need to solve A x = b, where A is a matrix and b is a vector...
@@ -209,7 +209,7 @@ impl CubicSpline {
 
         *a_up.first_mut().unwrap_or_else(|| unreachable!()) = one / (x_1 - x_0);
         *a_mid.first_mut().unwrap_or_else(|| unreachable!()) = two / (x_1 - x_0);
-        
+
         // x_n and xn-1
         let x_n = *x.get(len - 1).unwrap_or_else(|| unreachable!());
         let x_n1 = *x.get(len - 2).unwrap_or_else(|| unreachable!());
@@ -238,50 +238,48 @@ impl CubicSpline {
                 let x_right = x[1];
 
                 //bb.assign((y_m.sub(&y_l) / (x_m - x_l).pow(two) + y_r.sub(&y_m) / (x_r - x_m).pow(two)) * three);
-                Zip::from(y_left)
-                    .and(y_mid)
-                    .and(y_right)
-                    .map_assign_into(bb, |&y_left, &y_mid, &y_right| {
+                Zip::from(y_left).and(y_mid).and(y_right).map_assign_into(
+                    bb,
+                    |&y_left, &y_mid, &y_right| {
                         three
                             * ((y_mid - y_left) / (x_mid - x_left).pow(two)
                                 + (y_right - y_mid) / (x_right - x_mid).pow(two))
-                    }
+                    },
                 );
-            }
-        );
-        
+            });
+
         let bb_0 = bb.index_axis_mut(Axis(0), 0);
         let data_0 = data.index_axis(Axis(0), 0);
-        let data_1= data.index_axis(Axis(0), 0);
+        let data_1 = data.index_axis(Axis(0), 0);
         Zip::from(bb_0)
             .and(data_0)
             .and(data_1)
-            .for_each(|bb_0, &y_0, &y_1|{
+            .for_each(|bb_0, &y_0, &y_1| {
                 *bb_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
             });
-        
-        let bb_n = bb.index_axis_mut(Axis(0), len -1);
-        let data_n = data.index_axis(Axis(0), len-1);
-        let data_n1= data.index_axis(Axis(0), len-2);
+
+        let bb_n = bb.index_axis_mut(Axis(0), len - 1);
+        let data_n = data.index_axis(Axis(0), len - 1);
+        let data_n1 = data.index_axis(Axis(0), len - 2);
         Zip::from(bb_n)
             .and(data_n)
             .and(data_n1)
-            .for_each(|bb_n, &y_n, &y_n1|{
+            .for_each(|bb_n, &y_n, &y_n1| {
                 *bb_n = three * (y_n - y_n1) / (x_n - x_n1).pow(two);
             });
-        
+
         let mut c_star = Array::zeros(len);
         c_star[0] = a_up[0] / a_mid[0];
-        for idx in 1..len{
-            c_star[idx] = a_up[idx] / (a_mid[idx] - a_low[idx] * c_star[idx -1]);
+        for idx in 1..len {
+            c_star[idx] = a_up[idx] / (a_mid[idx] - a_low[idx] * c_star[idx - 1]);
         }
 
         let mut d_star = Array::zeros(dim.clone());
         let bb_0 = bb.index_axis(Axis(0), 0);
-        Zip::from(d_star.index_axis_mut(Axis(0),0))
+        Zip::from(d_star.index_axis_mut(Axis(0), 0))
             .and(bb_0)
-            .for_each(|d, &bb|{
-                *d = bb/a_mid[0];
+            .for_each(|d, &bb| {
+                *d = bb / a_mid[0];
             });
 
         let mut d_star_left = d_star.index_axis(Axis(0), 0).into_owned();
@@ -290,38 +288,39 @@ impl CubicSpline {
             Zip::from(d_star.index_axis_mut(Axis(0), idx))
                 .and(d_star_left.view())
                 .and(bb.index_axis(Axis(0), idx))
-                .for_each(|d, &d_left, &bb|{
+                .for_each(|d, &d_left, &bb| {
                     *d = (bb - a_low[idx] * d_left) / (a_mid[idx] - a_low[idx] * d_left);
                 });
         }
-        
-        let mut xx = Array::zeros(dim);
-        xx.index_axis_mut(Axis(0), len -1 ).assign(&d_star.index_axis(Axis(0), len-1));
-        let mut xx_right = xx.index_axis(Axis(0), len-1).into_owned();
 
-        for idx in (0..len-1).rev() {
+        let mut xx = Array::zeros(dim);
+        xx.index_axis_mut(Axis(0), len - 1)
+            .assign(&d_star.index_axis(Axis(0), len - 1));
+        let mut xx_right = xx.index_axis(Axis(0), len - 1).into_owned();
+
+        for idx in (0..len - 1).rev() {
             xx_right.assign(&xx.index_axis(Axis(0), idx));
             Zip::from(xx.index_axis_mut(Axis(0), idx))
                 .and(xx_right.view())
                 .and(d_star.index_axis(Axis(0), idx))
-                .for_each(|xx, &xx_right, &d|{
-                    *xx = d - c_star[idx]*xx_right;
+                .for_each(|xx, &xx_right, &d| {
+                    *xx = d - c_star[idx] * xx_right;
                 });
         }
 
         let mut a = Array::zeros(a_b_dim.clone());
         let mut b = Array::zeros(a_b_dim);
-        for index in 0..len-1 {
+        for index in 0..len - 1 {
             Zip::from(a.index_axis_mut(Axis(0), index))
-            .and(b.index_axis_mut(Axis(0), index))
-            .and(xx.index_axis(Axis(0), index))
-            .and(xx.index_axis(Axis(0), index + 1))
-            .and(data.index_axis(Axis(0), index))
-            .and(data.index_axis(Axis(0), index+1))
-            .for_each(|a,b,&xx,&xx_right,&y,&y_right|{
-                *a = xx * (x[index+1]-x[index])-(y_right-y);
-                *b = (y_right-y) - xx_right * (x[index+1]+x[index]);
-            })
+                .and(b.index_axis_mut(Axis(0), index))
+                .and(xx.index_axis(Axis(0), index))
+                .and(xx.index_axis(Axis(0), index + 1))
+                .and(data.index_axis(Axis(0), index))
+                .and(data.index_axis(Axis(0), index + 1))
+                .for_each(|a, b, &xx, &xx_right, &y, &y_right| {
+                    *a = xx * (x[index + 1] - x[index]) - (y_right - y);
+                    *b = (y_right - y) - xx_right * (x[index + 1] + x[index]);
+                })
         }
 
         (a, b)
@@ -351,7 +350,6 @@ where
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-
         if !(interp.range.0 <= x && x <= interp.range.1) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:#?} is not in range of {:#?}",
@@ -361,10 +359,10 @@ where
 
         let idx = interp.get_left_index(x);
         let (x_left, data_left) = interp.get_point(idx);
-        let (x_right, data_right) = interp.get_point(idx+1);
+        let (x_right, data_right) = interp.get_point(idx + 1);
         let a_left = self.a.index_axis(Axis(0), idx);
         let b_left = self.b.index_axis(Axis(0), idx);
-        let one: Sd::Elem = cast(1.0).unwrap_or_else(||unimplemented!());
+        let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());
 
         let t = (x - x_left) / (x_right - x_left);
         Zip::from(target)
@@ -372,8 +370,10 @@ where
             .and(data_right)
             .and(a_left)
             .and(b_left)
-            .for_each(|y, &y_left, &y_right, &a_left, &b_left|{
-                *y = (one - t) * y_left + t * y_right + t * (one -t)*(a_left*(one-t)+b_left*t);
+            .for_each(|y, &y_left, &y_right, &a_left, &b_left| {
+                *y = (one - t) * y_left
+                    + t * y_right
+                    + t * (one - t) * (a_left * (one - t) + b_left * t);
             });
         Ok(())
     }
