@@ -12,7 +12,7 @@ use crate::{
 };
 
 mod strategies;
-pub use strategies::{Linear, CubicSpline};
+pub use strategies::{CubicSpline, Linear};
 
 use strategies::{Strategy, StrategyBuilder};
 
@@ -243,7 +243,7 @@ where
     }
 
     /// the index of known value left of, or at x.
-    /// This will never return the right most index, 
+    /// This will never return the right most index,
     /// so calling [`get_point(idx+1)`](Interp1D::get_point) is safe.
     fn get_left_index(&self, x: Sx::Elem) -> usize {
         if let Some(xs) = &self.x {
