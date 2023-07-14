@@ -16,6 +16,8 @@ use crate::{
 
 use super::{Strategy, StrategyBuilder};
 
+const AX0: Axis = Axis(0);
+
 #[derive(Debug)]
 pub struct CubicSpline;
 impl<Sd, Sx, D> StrategyBuilder<Sd, Sx, D> for CubicSpline
@@ -130,14 +132,14 @@ impl CubicSpline {
         // RHS vector
         let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
 
-        let mut inner_rhs = rhs.slice_axis_mut(Axis(0), Slice::from(1..-1));
-        Zip::from(inner_rhs.axis_iter_mut(Axis(0)))
+        let mut inner_rhs = rhs.slice_axis_mut(AX0, Slice::from(1..-1));
+        Zip::from(inner_rhs.axis_iter_mut(AX0))
             .and(x.windows(3))
-            .and(data.axis_windows(Axis(0), 3))
+            .and(data.axis_windows(AX0, 3))
             .for_each(|rhs, x, data| {
-                let y_left = data.index_axis(Axis(0), 0);
-                let y_mid = data.index_axis(Axis(0), 1);
-                let y_right = data.index_axis(Axis(0), 2);
+                let y_left = data.index_axis(AX0, 0);
+                let y_mid = data.index_axis(AX0, 1);
+                let y_right = data.index_axis(AX0, 2);
                 let x_left = x[0];
                 let x_mid = x[1];
                 let x_right = x[2];
@@ -152,9 +154,9 @@ impl CubicSpline {
                 );
             });
 
-        let rhs_0 = rhs.index_axis_mut(Axis(0), 0);
-        let data_0 = data.index_axis(Axis(0), 0);
-        let data_1 = data.index_axis(Axis(0), 1);
+        let rhs_0 = rhs.index_axis_mut(AX0, 0);
+        let data_0 = data.index_axis(AX0, 0);
+        let data_1 = data.index_axis(AX0, 1);
         Zip::from(rhs_0)
             .and(data_0)
             .and(data_1)
@@ -162,9 +164,9 @@ impl CubicSpline {
                 *rhs_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
             });
 
-        let rhs_n = rhs.index_axis_mut(Axis(0), len - 1);
-        let data_n = data.index_axis(Axis(0), len - 1);
-        let data_n1 = data.index_axis(Axis(0), len - 2);
+        let rhs_n = rhs.index_axis_mut(AX0, len - 1);
+        let data_n = data.index_axis(AX0, len - 1);
+        let data_n1 = data.index_axis(AX0, len - 2);
         Zip::from(rhs_n)
             .and(data_n)
             .and(data_n1)
@@ -174,12 +176,12 @@ impl CubicSpline {
 
         // now solving With Thomas algorithm
 
-        let mut rhs_left = rhs.index_axis(Axis(0), 0).into_owned();
+        let mut rhs_left = rhs.index_axis(AX0, 0).into_owned();
         for i in 1..len {
             let w = a_low[i] / a_mid[i - 1];
             a_mid[i] -= w * a_up[i - 1];
 
-            let rhs = rhs.index_axis_mut(Axis(0), i);
+            let rhs = rhs.index_axis_mut(AX0, i);
             Zip::from(rhs)
                 .and(rhs_left.view_mut())
                 .for_each(|rhs, rhs_left| {
@@ -190,17 +192,17 @@ impl CubicSpline {
         }
 
         let mut k = Array::zeros(dim);
-        Zip::from(k.index_axis_mut(Axis(0), len - 1))
-            .and(rhs.index_axis(Axis(0), len - 1))
+        Zip::from(k.index_axis_mut(AX0, len - 1))
+            .and(rhs.index_axis(AX0, len - 1))
             .for_each(|k, &rhs| {
                 *k = rhs / a_mid[len - 1];
             });
 
-        let mut k_right = k.index_axis(Axis(0), len - 1).into_owned();
+        let mut k_right = k.index_axis(AX0, len - 1).into_owned();
         for i in (0..len - 1).rev() {
-            Zip::from(k.index_axis_mut(Axis(0), i))
+            Zip::from(k.index_axis_mut(AX0, i))
                 .and(k_right.view_mut())
-                .and(rhs.index_axis(Axis(0), i))
+                .and(rhs.index_axis(AX0, i))
                 .for_each(|k, k_right, &rhs| {
                     let new_k = (rhs - a_up[i] * *k_right) / a_mid[i];
                     *k = new_k;
@@ -211,12 +213,12 @@ impl CubicSpline {
         let mut c_a = Array::zeros(a_b_dim.clone());
         let mut c_b = Array::zeros(a_b_dim);
         for index in 0..len - 1 {
-            Zip::from(c_a.index_axis_mut(Axis(0), index))
-                .and(c_b.index_axis_mut(Axis(0), index))
-                .and(k.index_axis(Axis(0), index))
-                .and(k.index_axis(Axis(0), index + 1))
-                .and(data.index_axis(Axis(0), index))
-                .and(data.index_axis(Axis(0), index + 1))
+            Zip::from(c_a.index_axis_mut(AX0, index))
+                .and(c_b.index_axis_mut(AX0, index))
+                .and(k.index_axis(AX0, index))
+                .and(k.index_axis(AX0, index + 1))
+                .and(data.index_axis(AX0, index))
+                .and(data.index_axis(AX0, index + 1))
                 .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
                     *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
                     *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
@@ -260,8 +262,8 @@ where
         let idx = interp.get_left_index(x);
         let (x_left, data_left) = interp.get_point(idx);
         let (x_right, data_right) = interp.get_point(idx + 1);
-        let a_left = self.a.index_axis(Axis(0), idx);
-        let b_left = self.b.index_axis(Axis(0), idx);
+        let a_left = self.a.index_axis(AX0, idx);
+        let b_left = self.b.index_axis(AX0, idx);
         let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());
 
         let t = (x - x_left) / (x_right - x_left);
