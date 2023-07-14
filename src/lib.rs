@@ -1,3 +1,7 @@
+// Copyright (c) 2023 Jonas Bosse
+//
+// Licensed under the MIT license
+
 //! The ndarray-interp crate provides interpolation algorithms
 //! for interpolating _n_-dimesional data.
 //!
