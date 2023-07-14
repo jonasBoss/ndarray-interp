@@ -161,8 +161,15 @@ impl CubicSpline {
     ) -> (Array<Sd::Elem, D>, Array<Sd::Elem, D>)
     where
         Sd: Data,
-        Sd::Elem:
-            Num + Copy + Sub + SubAssign + NumCast + Add + Pow<Sd::Elem, Output = Sd::Elem> + ScalarOperand + Debug,
+        Sd::Elem: Num
+            + Copy
+            + Sub
+            + SubAssign
+            + NumCast
+            + Add
+            + Pow<Sd::Elem, Output = Sd::Elem>
+            + ScalarOperand
+            + Debug,
         Sx: Data<Elem = Sd::Elem>,
         D: Dimension + RemoveAxis,
     {
@@ -213,7 +220,7 @@ impl CubicSpline {
         let x_n1 = *x.get(len - 2).unwrap_or_else(|| unreachable!());
         *a_mid.last_mut().unwrap_or_else(|| unreachable!()) = two / (x_n - x_n1);
         *a_low.last_mut().unwrap_or_else(|| unreachable!()) = one / (x_n - x_n1);
-        
+
         // RHS vector
         let mut bb: Array<Sd::Elem, D> = Array::zeros(dim.clone());
 
@@ -239,7 +246,6 @@ impl CubicSpline {
                     },
                 );
             });
-        
 
         let bb_0 = bb.index_axis_mut(Axis(0), 0);
         let data_0 = data.index_axis(Axis(0), 0);
@@ -262,42 +268,40 @@ impl CubicSpline {
             });
 
         // now solving With Thomas algorithm
-        
+
         let mut bb_left = bb.index_axis(Axis(0), 0).into_owned();
-        for i in 1..len{
+        for i in 1..len {
             let w = a_low[i] / a_mid[i - 1];
-            a_mid[i] -= w * a_up[i-1];
+            a_mid[i] -= w * a_up[i - 1];
 
             let bb = bb.index_axis_mut(Axis(0), i);
             Zip::from(bb)
                 .and(bb_left.view_mut())
-                .for_each(|bb, bb_left|{
+                .for_each(|bb, bb_left| {
                     let new_bb = *bb - w * *bb_left;
                     *bb = new_bb;
                     *bb_left = new_bb;
                 });
         }
 
-
         let mut xx = Array::zeros(dim);
-        Zip::from(xx.index_axis_mut(Axis(0), len-1))
-            .and(bb.index_axis(Axis(0), len-1))
-            .for_each(|k, &bb|{
-                *k = bb/a_mid[len-1];
+        Zip::from(xx.index_axis_mut(Axis(0), len - 1))
+            .and(bb.index_axis(Axis(0), len - 1))
+            .for_each(|k, &bb| {
+                *k = bb / a_mid[len - 1];
             });
-        
-        let mut k_right = xx.index_axis(Axis(0), len-1).into_owned();
-        for i in (0..len-1).rev(){
+
+        let mut k_right = xx.index_axis(Axis(0), len - 1).into_owned();
+        for i in (0..len - 1).rev() {
             Zip::from(xx.index_axis_mut(Axis(0), i))
                 .and(k_right.view_mut())
                 .and(bb.index_axis(Axis(0), i))
-                .for_each(|k, k_right, &bb|{
-                    let new_k = (bb - a_up[i]* *k_right)/a_mid[i];
+                .for_each(|k, k_right, &bb| {
+                    let new_k = (bb - a_up[i] * *k_right) / a_mid[i];
                     *k = new_k;
                     *k_right = new_k;
                 })
         }
-
 
         let mut a = Array::zeros(a_b_dim.clone());
         let mut b = Array::zeros(a_b_dim);
@@ -313,7 +317,7 @@ impl CubicSpline {
                     *b = (y_right - y) - xx_right * (x[index + 1] - x[index]);
                 })
         }
-        
+
         (a, b)
     }
 }
