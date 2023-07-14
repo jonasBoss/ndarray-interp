@@ -12,7 +12,9 @@ use crate::{
 };
 
 mod strategies;
-pub use strategies::*;
+pub use strategies::{Linear, CubicSpline};
+
+use strategies::{Strategy, StrategyBuilder};
 
 /// One dimensional interpolator
 #[derive(Debug)]
@@ -222,8 +224,7 @@ where
     /// get x,data coordinate at given index
     /// panics at index out of range
     fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
-        let slice = Slice::from(idx..idx + 1);
-        let view = self.data.slice_axis(Axis(0), slice).remove_axis(Axis(0));
+        let view = self.data.index_axis(Axis(0), idx);
         match &self.x {
             Some(x) => (*x.get(idx).unwrap_or_else(|| unreachable!()), view),
             None => (NumCast::from(idx).unwrap_or_else(|| unreachable!()), view),
@@ -241,7 +242,9 @@ where
         m * (x - x1) + b
     }
 
-    /// the index of known value left of, or at x
+    /// the index of known value left of, or at x.
+    /// This will never return the right most index, 
+    /// so calling [`get_point(idx+1)`](Interp1D::get_point) is safe.
     fn get_left_index(&self, x: Sx::Elem) -> usize {
         if let Some(xs) = &self.x {
             // the x axis is given so we need to search for the index, and can not calculate it.
@@ -275,7 +278,7 @@ where
                     unimplemented!("mid is positive, so this should work always")
                 });
                 if mid_idx == range.1 {
-                    mid_idx -= 1
+                    mid_idx -= 1;
                 };
                 let mut mid_x = xs.get(mid_idx).unwrap_or_else(|| unreachable!());
 
@@ -309,8 +312,8 @@ where
             // for positive values
             let x = NumCast::from(x)
                 .unwrap_or_else(|| unimplemented!("x is positive, so this should always work"));
-            if x > self.data.len() - 1 {
-                self.data.len() - 1
+            if x >= self.data.raw_dim()[0] - 1 {
+                self.data.raw_dim()[0] - 2
             } else {
                 x
             }
