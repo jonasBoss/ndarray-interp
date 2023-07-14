@@ -201,26 +201,26 @@ impl CubicSpline {
             .and(a_low.slice_mut(s![1..-1]))
             .and(x.windows(3))
             .for_each(|a_up, a_mid, a_low, x| {
-                let x_left = *x.get(0).unwrap_or_else(|| unreachable!());
-                let x_mid = *x.get(1).unwrap_or_else(|| unreachable!());
-                let x_right = *x.get(2).unwrap_or_else(|| unreachable!());
+                let x_left = x[0];
+                let x_mid = x[1];
+                let x_right = x[2];
 
                 *a_up = one / (x_right - x_mid);
                 *a_mid = two / (x_mid - x_left) + two / (x_right - x_mid);
                 *a_low = one / (x_mid - x_left);
             });
 
-        let x_0 = *x.get(0).unwrap_or_else(|| unreachable!());
-        let x_1 = *x.get(1).unwrap_or_else(|| unreachable!());
+        let x_0 = x[0];
+        let x_1 = x[1];
 
-        *a_up.first_mut().unwrap_or_else(|| unreachable!()) = one / (x_1 - x_0);
-        *a_mid.first_mut().unwrap_or_else(|| unreachable!()) = two / (x_1 - x_0);
+        a_up[0] = one / (x_1 - x_0);
+        a_mid[0] = two / (x_1 - x_0);
 
         // x_n and xn-1
-        let x_n = *x.get(len - 1).unwrap_or_else(|| unreachable!());
-        let x_n1 = *x.get(len - 2).unwrap_or_else(|| unreachable!());
-        *a_mid.last_mut().unwrap_or_else(|| unreachable!()) = two / (x_n - x_n1);
-        *a_low.last_mut().unwrap_or_else(|| unreachable!()) = one / (x_n - x_n1);
+        let x_n = x[len - 1];
+        let x_n1 = x[len - 2];
+        a_mid[len - 1] = two / (x_n - x_n1);
+        a_low[len - 1] = one / (x_n - x_n1);
 
         // RHS vector
         let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
