@@ -17,6 +17,39 @@ use super::{Strategy, StrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
+/// The CubicSpline 1d interpolation Strategy
+/// 
+/// # Example
+/// From [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation#Example)
+/// ```
+/// # use ndarray_interp::*;
+/// # use ndarray_interp::interp1d::*;
+/// # use ndarray::*;
+/// # use approx::*;
+/// 
+/// let y = array![ 0.5, 0.0, 3.0];
+/// let x = array![-1.0, 0.0, 3.0];
+/// let query = Array::linspace(-1.0, 3.0, 10);
+/// let interpolator = Interp1DBuilder::new(y)
+///     .strategy(CubicSpline)
+///     .x(x)
+///     .build().unwrap();
+/// 
+/// let result = interpolator.interp_array(&query).unwrap();
+/// let expect = array![
+///     0.5, 
+///     0.2109053497942387, 
+///     0.020576131687242816, 
+///     0.01851851851851849, 
+///     0.21364883401920443, 
+///     0.5733882030178327, 
+///     1.0648148148148144, 
+///     1.6550068587105617, 
+///     2.3110425240054866, 
+///     3.0
+/// ];
+/// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
+/// ```
 #[derive(Debug)]
 pub struct CubicSpline;
 impl<Sd, Sx, D> StrategyBuilder<Sd, Sx, D> for CubicSpline

@@ -6,6 +6,12 @@ use num_traits::Num;
 use super::{Interp1D, Interp1DBuilder};
 use crate::{BuilderError, InterpolateError};
 
+mod linear;
+mod cubic_spline;
+
+pub use linear::Linear;
+pub use cubic_spline::CubicSpline;
+
 pub trait StrategyBuilder<Sd, Sx, D>
 where
     Sd: Data,
@@ -45,9 +51,3 @@ where
         x: Sx::Elem,
     ) -> Result<(), InterpolateError>;
 }
-
-mod cubic_spline;
-mod linear;
-
-pub use cubic_spline::CubicSpline;
-pub use linear::Linear;

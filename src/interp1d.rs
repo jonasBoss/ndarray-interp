@@ -12,9 +12,7 @@ use crate::{
 };
 
 mod strategies;
-pub use strategies::{CubicSpline, Linear};
-
-use strategies::{Strategy, StrategyBuilder};
+pub use strategies::{CubicSpline, Linear, Strategy, StrategyBuilder};
 
 /// One dimensional interpolator
 #[derive(Debug)]
