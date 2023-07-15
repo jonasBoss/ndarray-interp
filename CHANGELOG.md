@@ -3,6 +3,7 @@
  - replaced Interp1DStrategy enum with individual structs
  - added Strategy and StrategyBuilder trait
  - added QubicSpline strategy
+ - added traits for custom strategies
 
 # 0.1.1
  - updated package metadata

@@ -1,3 +1,13 @@
+//! A collection of structs and traits to interpolate data along the first axis
+//! 
+//! # Interpolator
+//!  - [`Interp1D`] The interpolator used with any strategy
+//!  - [`Interp1DBuilder`] Configure the interpolator
+//! 
+//! # Strategies
+//!  - [`Linear`] Linear interpolation strategy
+//!  - [`CubicSpline`] Cubic spline interpolation strategy
+
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{

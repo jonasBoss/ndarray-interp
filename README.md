@@ -8,6 +8,8 @@ A Interpolation crate for usage with the rust [ndarray](https://crates.io/crates
 
 ## Interpolation strategies
  - Linear interpolation with, and without extrapolation
+ - Cubic spline interpolation
+ - support for custom strategies
 
 ## Planned Features
  - More interpolation strategies
