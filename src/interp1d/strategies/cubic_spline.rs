@@ -276,9 +276,9 @@ where
             )));
         }
 
-        let idx = interp.get_left_index(x);
-        let (x_left, data_left) = interp.get_point(idx);
-        let (x_right, data_right) = interp.get_point(idx + 1);
+        let idx = interp.get_index_left_of(x);
+        let (x_left, data_left) = interp.index_point(idx);
+        let (x_right, data_right) = interp.index_point(idx + 1);
         let a_left = self.a.index_axis(AX0, idx);
         let b_left = self.b.index_axis(AX0, idx);
         let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());

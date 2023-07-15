@@ -219,13 +219,15 @@ where
         Ok(ys)
     }
 
-    /// get x,data coordinate at given index
-    /// panics at index out of range
-    fn get_point(&self, idx: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
-        let view = self.data.index_axis(Axis(0), idx);
+    /// get `(x, data)` coordinate at given index
+    ///
+    /// # panics
+    /// when index out of bounds
+    pub fn index_point(&self, index: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
+        let view = self.data.index_axis(Axis(0), index);
         match &self.x {
-            Some(x) => (*x.get(idx).unwrap_or_else(|| unreachable!()), view),
-            None => (NumCast::from(idx).unwrap_or_else(|| unreachable!()), view),
+            Some(x) => (*x.get(index).unwrap_or_else(|| unreachable!()), view),
+            None => (NumCast::from(index).unwrap_or_else(|| unreachable!()), view),
         }
     }
 
@@ -240,10 +242,11 @@ where
         m * (x - x1) + b
     }
 
-    /// the index of known value left of, or at x.
+    /// The index of a known value left of, or at x.
+    ///
     /// This will never return the right most index,
-    /// so calling [`get_point(idx+1)`](Interp1D::get_point) is safe.
-    fn get_left_index(&self, x: Sx::Elem) -> usize {
+    /// so calling [`index_point(idx+1)`](Interp1D::index_point) is always safe.
+    pub fn get_index_left_of(&self, x: Sx::Elem) -> usize {
         if let Some(xs) = &self.x {
             // the x axis is given so we need to search for the index, and can not calculate it.
             // the x axis is guaranteed to be strict monotonically rising.

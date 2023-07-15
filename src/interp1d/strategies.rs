@@ -25,7 +25,14 @@ where
 
     /// initialize the strategy by validating data and
     /// possibly calculating coefficients
-    /// This method is called by [`Interp1DBuilder::build`]
+    /// This method is called by [`Interp1DBuilder::build`](crate::interp1d::Interp1DBuilder::build)
+    ///
+    /// When this method is called by [`Interp1DBuilder`](crate::interp1d::Interp1DBuilder) the
+    /// following properties are guaranteed:
+    ///  - x is strictly monotonically rising
+    ///  - the lenght of x equals the lenght of the data Axis 0
+    ///  - the lenght is at least `MINIMUM_DATA_LENGHT`
+    ///  - Interpolation will happen along axis 0
     fn build<Sx2>(
         self,
         x: &ArrayBase<Sx2, Ix1>,
@@ -46,8 +53,12 @@ where
     /// Interpolate the at position x into the target array.
     /// This is used internally by [`Interp1D`].
     ///
-    /// When usde outside of [`Interp1D`] the behaviour is
-    /// undefined, possibly causing a panic.
+    /// When called by [`Interp1D`] the following
+    /// properties are guaranteed:
+    ///  - The shape of the target array matches the
+    ///     shape of the data array (provided to the builder)
+    ///     with the first axis removed.
+    ///  - x can be any valid `Sx::Elem`
     fn interp_into(
         &self,
         interpolator: &Interp1D<Sd, Sx, D, Self>,

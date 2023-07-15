@@ -56,11 +56,11 @@ where
         }
 
         // find the relevant index
-        let idx = this.get_left_index(x);
+        let idx = this.get_index_left_of(x);
 
         // lookup the data
-        let (x1, y1) = this.get_point(idx);
-        let (x2, y2) = this.get_point(idx + 1);
+        let (x1, y1) = this.index_point(idx);
+        let (x2, y2) = this.index_point(idx + 1);
 
         // do interpolation
         Zip::from(target).and(y1).and(y2).for_each(|t, &y1, &y2| {
