@@ -4,7 +4,7 @@ use ndarray::{
     s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
     Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice,
 };
-use num_traits::{Num, NumCast};
+use num_traits::{cast, Num, NumCast};
 
 use crate::{
     vector_extensions::{Monotonic, VectorExtensions},
@@ -334,7 +334,7 @@ where
 {
     x: Option<ArrayBase<Sx, Ix1>>,
     data: ArrayBase<Sd, D>,
-    strategy: Option<Strat>,
+    strategy: Strat,
 }
 
 impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear>
@@ -351,7 +351,7 @@ where
         Interp1DBuilder {
             x: None,
             data,
-            strategy: Some(Linear { extrapolate: false }),
+            strategy: Linear { extrapolate: false },
         }
     }
 }
@@ -386,15 +386,11 @@ where
         NewStrat: StrategyBuilder<Sd, Sx, D>,
     {
         let Interp1DBuilder { x, data, .. } = self;
-        Interp1DBuilder {
-            x,
-            data,
-            strategy: Some(strategy),
-        }
+        Interp1DBuilder { x, data, strategy }
     }
 
     /// Validate input data and create the configured [Interp1D]
-    pub fn build(mut self) -> Result<Interp1D<Sd, Sx, D, Strat::FinishedStrat>, BuilderError> {
+    pub fn build(self) -> Result<Interp1D<Sd, Sx, D, Strat::FinishedStrat>, BuilderError> {
         let &len = self
             .data
             .raw_dim()
@@ -441,13 +437,18 @@ where
             ),
         };
 
-        let strategy = self
-            .strategy
-            .take()
-            .unwrap_or_else(|| {
-                unreachable!("this is the only place where the option is set to None")
-            })
-            .build(&self)?;
+        let strategy = match self.x.as_ref() {
+            Some(x) => self.strategy.build(x, &self.data)?,
+            None => {
+                let len = self.data.raw_dim()[0];
+                let x = Array::from_iter((0..len).map(|n| {
+                    cast(n).unwrap_or_else(|| {
+                        unimplemented!("casting from usize to a number should always work")
+                    })
+                }));
+                self.strategy.build(&x, &self.data)?
+            }
+        };
         Ok(Interp1D {
             x: self.x,
             data: self.data,

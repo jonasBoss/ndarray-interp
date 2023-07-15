@@ -8,17 +8,14 @@ use ndarray::{
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
-use crate::{
-    interp1d::{Interp1D, Interp1DBuilder},
-    BuilderError, InterpolateError,
-};
+use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
 use super::{Strategy, StrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
 /// The CubicSpline 1d interpolation Strategy
-/// 
+///
 /// # Example
 /// From [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation#Example)
 /// ```
@@ -26,7 +23,7 @@ const AX0: Axis = Axis(0);
 /// # use ndarray_interp::interp1d::*;
 /// # use ndarray::*;
 /// # use approx::*;
-/// 
+///
 /// let y = array![ 0.5, 0.0, 3.0];
 /// let x = array![-1.0, 0.0, 3.0];
 /// let query = Array::linspace(-1.0, 3.0, 10);
@@ -34,18 +31,18 @@ const AX0: Axis = Axis(0);
 ///     .strategy(CubicSpline)
 ///     .x(x)
 ///     .build().unwrap();
-/// 
+///
 /// let result = interpolator.interp_array(&query).unwrap();
 /// let expect = array![
-///     0.5, 
-///     0.2109053497942387, 
-///     0.020576131687242816, 
-///     0.01851851851851849, 
-///     0.21364883401920443, 
-///     0.5733882030178327, 
-///     1.0648148148148144, 
-///     1.6550068587105617, 
-///     2.3110425240054866, 
+///     0.5,
+///     0.2109053497942387,
+///     0.020576131687242816,
+///     0.01851851851851849,
+///     0.21364883401920443,
+///     0.5733882030178327,
+///     1.0648148148148144,
+///     1.6550068587105617,
+///     2.3110425240054866,
 ///     3.0
 /// ];
 /// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
@@ -71,23 +68,15 @@ where
     const MINIMUM_DATA_LENGHT: usize = 3;
     type FinishedStrat = CubicSplineStrategy<Sd, D>;
 
-    fn build(
+    fn build<Sx2>(
         self,
-        builder: &Interp1DBuilder<Sd, Sx, D, Self>,
-    ) -> Result<Self::FinishedStrat, BuilderError> {
-        let dim = builder.data.raw_dim();
-        let len = dim[0];
-        let (a, b) = match builder.x.as_ref() {
-            Some(x) => self.calc_coefficients(x, &builder.data),
-            None => {
-                let x = Array::from_iter((0..len).map(|n| {
-                    cast(n).unwrap_or_else(|| {
-                        unimplemented!("casting from usize to a number should always work")
-                    })
-                }));
-                self.calc_coefficients(&x, &builder.data)
-            }
-        };
+        x: &ArrayBase<Sx2, Ix1>,
+        data: &ArrayBase<Sd, D>,
+    ) -> Result<Self::FinishedStrat, BuilderError>
+    where
+        Sx2: Data<Elem = Sd::Elem>,
+    {
+        let (a, b) = self.calc_coefficients(x, data);
         Ok(CubicSplineStrategy { a, b })
     }
 }
@@ -164,14 +153,14 @@ impl CubicSpline {
         // RHS vector
         let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
 
-        for i in 1..len-1{
+        for i in 1..len - 1 {
             let rhs = rhs.index_axis_mut(AX0, i);
-            let y_left = data.index_axis(AX0, i-1);
+            let y_left = data.index_axis(AX0, i - 1);
             let y_mid = data.index_axis(AX0, i);
-            let y_right = data.index_axis(AX0, i+1);
-            let x_left = x[i-1];
+            let y_right = data.index_axis(AX0, i + 1);
+            let x_left = x[i - 1];
             let x_mid = x[i];
-            let x_right = x[i+1];
+            let x_right = x[i + 1];
             Zip::from(y_left).and(y_mid).and(y_right).map_assign_into(
                 rhs,
                 |&y_left, &y_mid, &y_right| {

@@ -1,16 +1,16 @@
 use std::fmt::Debug;
 
-use ndarray::{ArrayViewMut, Data, Dimension};
+use ndarray::{ArrayBase, ArrayViewMut, Data, Dimension, Ix1};
 use num_traits::Num;
 
-use super::{Interp1D, Interp1DBuilder};
+use super::Interp1D;
 use crate::{BuilderError, InterpolateError};
 
-mod linear;
 mod cubic_spline;
+mod linear;
 
-pub use linear::Linear;
 pub use cubic_spline::CubicSpline;
+pub use linear::Linear;
 
 pub trait StrategyBuilder<Sd, Sx, D>
 where
@@ -25,10 +25,14 @@ where
 
     /// initialize the strategy by validating data and
     /// possibly calculating coefficients
-    fn build(
+    /// This method is called by [`Interp1DBuilder::build`]
+    fn build<Sx2>(
         self,
-        builder: &Interp1DBuilder<Sd, Sx, D, Self>,
-    ) -> Result<Self::FinishedStrat, BuilderError>;
+        x: &ArrayBase<Sx2, Ix1>,
+        data: &ArrayBase<Sd, D>,
+    ) -> Result<Self::FinishedStrat, BuilderError>
+    where
+        Sx2: Data<Elem = Sd::Elem>;
 }
 
 pub trait Strategy<Sd, Sx, D>

@@ -1,12 +1,9 @@
 use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{ArrayViewMut, Data, Dimension, RemoveAxis, Zip};
+use ndarray::{ArrayBase, ArrayViewMut, Data, Dimension, Ix1, RemoveAxis, Zip};
 use num_traits::{Num, NumCast};
 
-use crate::{
-    interp1d::{Interp1D, Interp1DBuilder},
-    BuilderError, InterpolateError,
-};
+use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
 use super::{Strategy, StrategyBuilder};
 
@@ -25,10 +22,14 @@ where
 {
     const MINIMUM_DATA_LENGHT: usize = 2;
     type FinishedStrat = Linear;
-    fn build(
+    fn build<Sx2>(
         self,
-        _builder: &Interp1DBuilder<Sd, Sx, D, Self>,
-    ) -> Result<Self::FinishedStrat, BuilderError> {
+        _x: &ArrayBase<Sx2, Ix1>,
+        _data: &ArrayBase<Sd, D>,
+    ) -> Result<Self::FinishedStrat, BuilderError>
+    where
+        Sx2: Data<Elem = Sd::Elem>,
+    {
         Ok(self)
     }
 }
