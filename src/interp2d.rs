@@ -3,7 +3,7 @@ use std::{
     ops::Sub,
 };
 
-use ndarray::{Array1, ArrayBase, Data, Dimension, Ix1, OwnedRepr};
+use ndarray::{Array1, ArrayBase, Data, Dimension, Ix1, OwnedRepr, Ix2, Array, RemoveAxis, DimAdd, NdIndex};
 use num_traits::{Num, NumCast, cast};
 
 use crate::{
@@ -40,6 +40,40 @@ where
         data: ArrayBase<Sd, D>,
     ) -> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar> {
         Interp2DBuilder::new(data)
+    }
+}
+
+impl<Sd, Sx, Sy, Strat> Interp2D<Sd, Sx, Sy, Ix2, Strat>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sx: Data<Elem = Sd::Elem>,
+    Sy: Data<Elem = Sd::Elem>,
+{
+    pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError>{
+        todo!()
+    }
+}
+
+impl<Sd, Sx,Sy,D,Strat> Interp2D<Sd, Sx, Sy, D, Strat> 
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sx: Data<Elem = Sd::Elem>,
+    Sy: Data<Elem = Sd::Elem>,
+    D: Dimension,
+{
+    pub fn interp(&self, x: Sx::Elem, y:Sy::Elem) -> Result<Array<Sd::Elem, <D::Smaller as Dimension>::Smaller>, InterpolateError>{
+        todo!()
+    }
+
+    pub fn interp_array<Dq>(&self, q: &ArrayBase<Sx, Dq>
+    )-> Result<Array<Sd::Elem, <Dq::Smaller as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>, InterpolateError>
+    where
+        Dq: Dimension,
+        Dq::Smaller: DimAdd<<D::Smaller as Dimension>::Smaller>
+    {
+        todo!()
     }
 }
 
