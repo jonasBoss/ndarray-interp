@@ -193,3 +193,13 @@ fn interp_multi_fn() {
         epsilon = f64::EPSILON
     );
 }
+
+#[test]
+fn interp_array_with_differnt_repr(){
+    let interp = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+        .build()
+        .unwrap();
+    let x_query = array![[1.0, 2.0, 9.0], [4.0, 5.0, 7.5]];
+    let y_expect = array![[2.0, 3.0, 1.0], [5.0, 5.0, 2.5]];
+    assert_eq!(interp.interp_array(&x_query.view()).unwrap(), y_expect);
+}
