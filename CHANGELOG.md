@@ -1,3 +1,9 @@
+# 0.2.1
+ - change interp_array such that it can be called with any 
+   kind of array repreresenation (owned, view, ...) technically this 
+   breaks public API, but due to type inference this should never manifest 
+   as a breaking change.
+
 # 0.2.0
  - updated package structure
  - replaced Interp1DStrategy enum with individual structs
