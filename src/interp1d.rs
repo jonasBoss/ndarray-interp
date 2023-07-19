@@ -12,7 +12,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
-    Ix1, NdIndex, OwnedRepr, RemoveAxis, Slice,
+    Ix1, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
 
@@ -183,23 +183,20 @@ where
     /// let result = interpolator.interp_array(&query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
     /// ```
-    pub fn interp_array<Dq>(
+    pub fn interp_array<Sq, Dq>(
         &self,
-        xs: &ArrayBase<Sx, Dq>,
+        xs: &ArrayBase<Sq, Dq>,
     ) -> Result<Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
     where
+        Sq: Data<Elem = Sd::Elem>,
         Dq: Dimension + DimAdd<D::Smaller>,
     {
         let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
         dim.as_array_view_mut()
             .into_iter()
-            .zip(
-                xs.shape()
-                    .iter()
-                    .chain(self.data.raw_dim().as_array_view().slice(s![1..])),
-            )
-            .for_each(|(new_axis, len)| {
-                *new_axis = *len;
+            .zip(xs.shape().iter().chain(self.data.shape()[1..].iter()))
+            .for_each(|(new_axis, &len)| {
+                *new_axis = len;
             });
         let mut ys = Array::zeros(dim);
 
