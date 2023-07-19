@@ -40,7 +40,7 @@ where
     fn interp_into(
         &self,
         interpolator: &crate::interp2d::Interp2D<Sd, Sx, Sy, D, Self>,
-        target: ndarray::ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
+        target: ndarray::ArrayViewMut<'_, <Sd>::Elem, <D::Smaller as Dimension>::Smaller>,
         x: <Sx>::Elem,
         y: <Sy>::Elem,
     ) -> Result<(), crate::InterpolateError> {

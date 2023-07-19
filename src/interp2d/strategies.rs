@@ -42,7 +42,7 @@ where
     fn interp_into(
         &self,
         interpolator: &Interp2D<Sd, Sx, Sy, D, Self>,
-        target: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
+        target: ArrayViewMut<'_, Sd::Elem, <D::Smaller as Dimension>::Smaller>,
         x: Sx::Elem,
         y: Sy::Elem,
     ) -> Result<(), InterpolateError>;

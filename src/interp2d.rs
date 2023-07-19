@@ -3,7 +3,7 @@ use std::{
     ops::Sub,
 };
 
-use ndarray::{Array1, ArrayBase, Data, Dimension, Ix1, OwnedRepr, Ix2, Array, RemoveAxis, DimAdd, NdIndex};
+use ndarray::{Array1, ArrayBase, Data, Dimension, Ix1, OwnedRepr, Ix2, Array, RemoveAxis, DimAdd, NdIndex, Axis, IntoDimension, AxisDescription, Slice};
 use num_traits::{Num, NumCast, cast};
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
     BuilderError, InterpolateError,
 };
 
-use self::strategies::{Biliniar, StrategyBuilder};
+use self::strategies::{Biliniar, StrategyBuilder, Strategy};
 
 mod strategies;
 
@@ -49,9 +49,10 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
+    Strat: Strategy<Sd, Sx, Sy, Ix2>,
 {
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError>{
-        todo!()
+        Ok(*self.interp(x, y)?.first().unwrap_or_else(||unreachable!()))
     }
 }
 
@@ -61,19 +62,57 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
+    D::Smaller: RemoveAxis,
+    Strat: Strategy<Sd, Sx, Sy, D>,
 {
     pub fn interp(&self, x: Sx::Elem, y:Sy::Elem) -> Result<Array<Sd::Elem, <D::Smaller as Dimension>::Smaller>, InterpolateError>{
-        todo!()
+        let dim = self.data.raw_dim().remove_axis(Axis(0)).remove_axis(Axis(0));
+        let mut target = Array::zeros(dim);
+        self.strategy
+            .interp_into(self, target.view_mut(), x, y)
+            .map(|_|target)
     }
 
-    pub fn interp_array<Dq>(&self, q: &ArrayBase<Sx, Dq>
-    )-> Result<Array<Sd::Elem, <Dq::Smaller as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>, InterpolateError>
+    pub fn interp_array<Sqx, Sqy, Dq>(&self, xs: &ArrayBase<Sqx, Dq>, ys: &ArrayBase<Sqy, Dq>
+    )-> Result<Array<Sd::Elem, <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>, InterpolateError>
     where
+        Sqx: Data<Elem = Sd::Elem>,
+        Sqy: Data<Elem = Sy::Elem>,
         Dq: Dimension,
-        Dq::Smaller: DimAdd<<D::Smaller as Dimension>::Smaller>
+        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>
     {
-        todo!()
+        let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
+        assert!(xs.shape() == ys.shape());
+        dim.as_array_view_mut()
+            .into_iter()
+            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
+            .for_each(|(new_axis, &len)|{
+                *new_axis = len;
+            });
+        let mut zs = Array::zeros(dim);
+        for (index, &x) in xs.indexed_iter(){
+            let current_dim = index.clone().into_dimension();
+            let y = *ys.get(current_dim.clone()).unwrap_or_else(||unreachable!());
+            let subview = 
+                zs.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| match current_dim
+                    .as_array_view()
+                    .get(nr)
+                {
+                    Some(idx) => Slice::from(*idx..*idx + 1),
+                    None => Slice::from(..),
+                });
+            
+            self.strategy.interp_into(
+                self, 
+                subview.into_shape(self.data.raw_dim().remove_axis(Axis(0)).remove_axis(Axis(0)))
+                    .unwrap_or_else(|_|unreachable!()), 
+                x, 
+                y
+            )?;
+        }
+
+        Ok(zs)
     }
 }
 
