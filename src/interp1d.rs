@@ -1,9 +1,9 @@
 //! A collection of structs and traits to interpolate data along the first axis
-//! 
+//!
 //! # Interpolator
 //!  - [`Interp1D`] The interpolator used with any strategy
 //!  - [`Interp1DBuilder`] Configure the interpolator
-//! 
+//!
 //! # Strategies
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy
@@ -11,7 +11,7 @@
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
+    Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
     Ix1, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};

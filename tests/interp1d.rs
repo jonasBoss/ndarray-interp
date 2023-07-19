@@ -195,7 +195,7 @@ fn interp_multi_fn() {
 }
 
 #[test]
-fn interp_array_with_differnt_repr(){
+fn interp_array_with_differnt_repr() {
     let interp = Interp1D::builder(array![1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 4.0, 3.0, 2.0, 1.0])
         .build()
         .unwrap();
