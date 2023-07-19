@@ -64,8 +64,23 @@ where
 
         // do interpolation
         Zip::from(target).and(y1).and(y2).for_each(|t, &y1, &y2| {
-            *t = Interp1D::<Sd, Sx, D, Self>::calc_frac((x1, y1), (x2, y2), x);
+            *t = Self::calc_frac((x1, y1), (x2, y2), x);
         });
         Ok(())
     }
+}
+
+impl Linear {
+    /// linearly interpolate/exrapolate between two points
+    pub(crate) fn calc_frac<T>(
+        (x1, y1): (T, T),
+        (x2, y2): (T, T),
+        x: T,
+    ) -> T 
+    where T: Num + Copy,
+    {
+        let b = y1;
+        let m = (y2 - y1) / (x2 - x1);
+        m * (x - x1) + b
+    }    
 }

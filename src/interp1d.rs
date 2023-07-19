@@ -1,9 +1,9 @@
 //! A collection of structs and traits to interpolate data along the first axis
-//! 
+//!
 //! # Interpolator
 //!  - [`Interp1D`] The interpolator used with any strategy
 //!  - [`Interp1DBuilder`] Configure the interpolator
-//! 
+//!
 //! # Strategies
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy
@@ -188,9 +188,7 @@ where
         xs: &ArrayBase<Sx, Dq>,
     ) -> Result<Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
     where
-        D: RemoveAxis,
         Dq: Dimension + DimAdd<D::Smaller>,
-        Dq::Pattern: NdIndex<Dq>,
     {
         let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
         dim.as_array_view_mut()
@@ -241,81 +239,13 @@ where
         }
     }
 
-    /// linearly interpolate/exrapolate between two points
-    fn calc_frac(
-        (x1, y1): (Sx::Elem, Sd::Elem),
-        (x2, y2): (Sx::Elem, Sd::Elem),
-        x: Sx::Elem,
-    ) -> Sx::Elem {
-        let b = y1;
-        let m = (y2 - y1) / (x2 - x1);
-        m * (x - x1) + b
-    }
-
     /// The index of a known value left of, or at x.
     ///
     /// This will never return the right most index,
     /// so calling [`index_point(idx+1)`](Interp1D::index_point) is always safe.
     pub fn get_index_left_of(&self, x: Sx::Elem) -> usize {
         if let Some(xs) = &self.x {
-            // the x axis is given so we need to search for the index, and can not calculate it.
-            // the x axis is guaranteed to be strict monotonically rising.
-            // We assume that the spacing is even. So we can calculate the index
-            // and check it. This finishes in O(1) for even spaced axis.
-            // Otherwise we do a binary search with O(log n)
-            let mut range = (0usize, xs.len() - 1);
-            while range.0 + 1 < range.1 {
-                let p1 = (
-                    *xs.get(range.0).unwrap_or_else(|| unreachable!()),
-                    NumCast::from(range.0).unwrap_or_else(|| {
-                        unimplemented!("casting from usize should always work!")
-                    }),
-                );
-                let p2 = (
-                    *xs.get(range.1).unwrap_or_else(|| unreachable!()),
-                    NumCast::from(range.1).unwrap_or_else(|| {
-                        unimplemented!("casting from usize should always work!")
-                    }),
-                );
-
-                let mid = Self::calc_frac(p1, p2, x);
-                if mid < NumCast::from(0).unwrap_or_else(|| unimplemented!()) {
-                    // neagtive values might occure when extrapolating index 0 is
-                    // the guaranteed solution
-                    return 0;
-                }
-
-                let mut mid_idx: usize = NumCast::from(mid).unwrap_or_else(|| {
-                    unimplemented!("mid is positive, so this should work always")
-                });
-                if mid_idx == range.1 {
-                    mid_idx -= 1;
-                };
-                let mut mid_x = xs.get(mid_idx).unwrap_or_else(|| unreachable!());
-
-                if mid_x <= &x && x <= *xs.get(mid_idx + 1).unwrap_or_else(|| unreachable!()) {
-                    return mid_idx;
-                }
-                if mid_x < &x {
-                    range.0 = mid_idx;
-                } else {
-                    range.1 = mid_idx;
-                }
-
-                // the above alone has the potential to end in an infinte loop
-                // do a binary search step to guarantee progress
-                mid_idx = (range.1 - range.0) / 2 + range.0;
-                mid_x = xs.get(mid_idx).unwrap_or_else(|| unreachable!());
-                if mid_x == &x {
-                    return mid_idx;
-                }
-                if mid_x < &x {
-                    range.0 = mid_idx;
-                } else {
-                    range.1 = mid_idx;
-                }
-            }
-            range.0
+            xs.get_lower_index(x)
         } else if x < NumCast::from(0).unwrap_or_else(|| unimplemented!()) {
             0
         } else {
@@ -323,8 +253,8 @@ where
             // for positive values
             let x = NumCast::from(x)
                 .unwrap_or_else(|| unimplemented!("x is positive, so this should always work"));
-            if x >= self.data.raw_dim()[0] - 1 {
-                self.data.raw_dim()[0] - 2
+            if x >= self.data.shape()[0] - 1 {
+                self.data.shape()[0] - 2
             } else {
                 x
             }
@@ -404,23 +334,24 @@ where
 
     /// Validate input data and create the configured [Interp1D]
     pub fn build(self) -> Result<Interp1D<Sd, Sx, D, Strat::FinishedStrat>, BuilderError> {
-        let &len = self
-            .data
-            .raw_dim()
-            .as_array_view()
-            .get(0)
-            .ok_or(BuilderError::DimensionError("data dimension is 0".into()))?;
-        if len < Strat::MINIMUM_DATA_LENGHT {
-            return Err(BuilderError::NotEnoughData(format!(
+        use self::Monotonic::*;
+        use BuilderError::*;
+        if self.data.ndim() < 1 {
+            return Err(DimensionError(
+                "data dimension is 0, needs to be at least 1".into(),
+            ));
+        }
+        if self.data.shape()[0] < Strat::MINIMUM_DATA_LENGHT {
+            return Err(NotEnoughData(format!(
                 "The chosen Interpolation strategy needs at least {} data points",
                 Strat::MINIMUM_DATA_LENGHT
             )));
-        };
+        }
 
         if let Some(x) = &self.x {
             match x.monotonic_prop() {
-                Monotonic::Rising { strict: true } => Ok(()),
-                _ => Err(BuilderError::Monotonic(
+                Rising { strict: true } => Ok(()),
+                _ => Err(Monotonic(
                     "Values in the x axis need to be strictly monotonic rising".into(),
                 )),
             }?;
