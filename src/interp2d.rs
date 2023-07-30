@@ -11,7 +11,7 @@ use crate::{
     BuilderError, InterpolateError,
 };
 
-use self::strategies::{Biliniar, Strategy, StrategyBuilder};
+use self::strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
 
 mod strategies;
 
@@ -49,7 +49,7 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    Strat: Strategy<Sd, Sx, Sy, Ix2>,
+    Strat: Interp2DStrategy<Sd, Sx, Sy, Ix2>,
 {
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
         Ok(*self.interp(x, y)?.first().unwrap_or_else(|| unreachable!()))
@@ -64,7 +64,7 @@ where
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
     D::Smaller: RemoveAxis,
-    Strat: Strategy<Sd, Sx, Sy, D>,
+    Strat: Interp2DStrategy<Sd, Sx, Sy, D>,
 {
     pub fn interp(
         &self,
@@ -233,9 +233,9 @@ where
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
     D::Smaller: RemoveAxis,
-    Strat: StrategyBuilder<Sd, Sx, Sy, D>,
+    Strat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>,
 {
-    pub fn strategy<NewStrat: StrategyBuilder<Sd, Sx, Sy, D>>(
+    pub fn strategy<NewStrat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>>(
         self,
         strategy: NewStrat,
     ) -> Interp2DBuilder<Sd, Sx, Sy, D, NewStrat> {

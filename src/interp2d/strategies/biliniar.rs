@@ -5,11 +5,11 @@ use num_traits::{Num, NumCast};
 
 use crate::{interp1d::Linear, InterpolateError};
 
-use super::{Strategy, StrategyBuilder};
+use super::{Interp2DStrategy, Interp2DStrategyBuilder};
 
 pub struct Biliniar;
 
-impl<Sd, Sx, Sy, D> StrategyBuilder<Sd, Sx, Sy, D> for Biliniar
+impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Biliniar
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<Sd, Sx, Sy, D> Strategy<Sd, Sx, Sy, D> for Biliniar
+impl<Sd, Sx, Sy, D> Interp2DStrategy<Sd, Sx, Sy, D> for Biliniar
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,

@@ -10,8 +10,8 @@
 //! interpolation methods provide examples.
 //!
 //! # Custom interpolation strategy
-//! This crate defines the traits [`StrategyBuilder`](interp1d::StrategyBuilder)
-//! and [`Strategy`](interp1d::Strategy) that allow implementation of user
+//! This crate defines the traits [`Interp1DStrategyBuilder`](interp1d::Interp1DStrategyBuilder)
+//! and [`Interp1DStrategy`](interp1d::Interp1DStrategy) that allow implementation of user
 //! defined interpolation algorithms.
 //! see the `custom_strategy.rs` example.
 //!

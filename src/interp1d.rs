@@ -22,7 +22,7 @@ use crate::{
 };
 
 mod strategies;
-pub use strategies::{CubicSpline, Linear, Strategy, StrategyBuilder};
+pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
 
 /// One dimensional interpolator
 #[derive(Debug)]
@@ -32,7 +32,7 @@ where
     Sd::Elem: Num + Debug,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
-    Strat: Strategy<Sd, Sx, D>,
+    Strat: Interp1DStrategy<Sd, Sx, D>,
 {
     /// x values are guaranteed to be strict monotonically rising
     /// if x is None, the x values are assumed to be the index of data
@@ -47,7 +47,7 @@ where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
-    Strat: Strategy<Sd, Sx, Ix1>,
+    Strat: Interp1DStrategy<Sd, Sx, Ix1>,
 {
     /// convinient interpolation function for interpolation at one point
     /// when the data dimension is [`type@Ix1`]
@@ -89,7 +89,7 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
-    Strat: Strategy<Sd, Sx, D>,
+    Strat: Interp1DStrategy<Sd, Sx, D>,
 {
     /// Calculate the interpolated values at `x`.
     /// Returns the interpolated data in an array one dimension smaller than
@@ -302,7 +302,7 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
-    Strat: StrategyBuilder<Sd, Sx, D>,
+    Strat: Interp1DStrategyBuilder<Sd, Sx, D>,
 {
     /// Add an custom x axis for the data. The axis needs to have the same lenght
     /// and store the same Type as the data. `x`  must be strict monotonic rising.
@@ -319,11 +319,11 @@ where
         }
     }
 
-    /// Set the interpolation strategy by providing a [StrategyBuilder].
+    /// Set the interpolation strategy by providing a [Interp1DStrategyBuilder].
     /// By default [Linear] with `Linear{extrapolate: false}` is used.
     pub fn strategy<NewStrat>(self, strategy: NewStrat) -> Interp1DBuilder<Sd, Sx, D, NewStrat>
     where
-        NewStrat: StrategyBuilder<Sd, Sx, D>,
+        NewStrat: Interp1DStrategyBuilder<Sd, Sx, D>,
     {
         let Interp1DBuilder { x, data, .. } = self;
         Interp1DBuilder { x, data, strategy }

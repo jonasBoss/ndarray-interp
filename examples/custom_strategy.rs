@@ -1,13 +1,13 @@
 use approx::assert_abs_diff_eq;
 use ndarray::{array, Array, ArrayViewMut, Data, Dimension, RemoveAxis};
 use ndarray_interp::{
-    interp1d::{Interp1D, Strategy, StrategyBuilder},
+    interp1d::{Interp1D, Interp1DStrategy, Interp1DStrategyBuilder},
     InterpolateError,
 };
 
 struct StepInterpolator;
 
-impl<Sd, Sx, D> StrategyBuilder<Sd, Sx, D> for StepInterpolator
+impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for StepInterpolator
 where
     Sd: Data<Elem = f64>,
     Sx: Data<Elem = Sd::Elem>,
@@ -29,7 +29,7 @@ where
     }
 }
 
-impl<Sd, Sx, D> Strategy<Sd, Sx, D> for StepInterpolator
+impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for StepInterpolator
 where
     Sd: Data<Elem = f64>,
     Sx: Data<Elem = Sd::Elem>,

@@ -11,7 +11,7 @@ mod biliniar;
 
 pub use biliniar::Biliniar;
 
-pub trait StrategyBuilder<Sd, Sx, Sy, D>
+pub trait Interp2DStrategyBuilder<Sd, Sx, Sy, D>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
@@ -21,7 +21,7 @@ where
     D::Smaller: RemoveAxis,
 {
     const MINIMUM_DATA_LENGHT: usize;
-    type FinishedStrat: Strategy<Sd, Sx, Sy, D>;
+    type FinishedStrat: Interp2DStrategy<Sd, Sx, Sy, D>;
 
     fn build(
         self,
@@ -31,7 +31,7 @@ where
     ) -> Result<Self::FinishedStrat, BuilderError>;
 }
 
-pub trait Strategy<Sd, Sx, Sy, D>
+pub trait Interp2DStrategy<Sd, Sx, Sy, D>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
