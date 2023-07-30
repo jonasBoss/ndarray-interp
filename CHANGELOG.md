@@ -1,6 +1,7 @@
 # 0.3.0
  - add 2d interpolation
  - add biliniar interpolation strategy
+ - rename `Strategy` to `Interp1DStrategy` and `StrategyBuilder` to `Interp1DStrategyBuilder`
 
 # 0.2.1
  - change interp_array such that it can be called with any 
