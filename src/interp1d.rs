@@ -11,7 +11,7 @@
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
+    Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
     Ix1, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
@@ -231,7 +231,7 @@ where
     pub fn index_point(&self, index: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
         let view = self.data.index_axis(Axis(0), index);
         match &self.x {
-            Some(x) => (*x.get(index).unwrap_or_else(|| unreachable!()), view),
+            Some(x) => (x[index], view),
             None => (NumCast::from(index).unwrap_or_else(|| unreachable!()), view),
         }
     }

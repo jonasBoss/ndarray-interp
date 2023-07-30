@@ -6,10 +6,12 @@ pub(crate) trait VectorExtensions<T> {
     fn monotonic_prop(&self) -> Monotonic;
 
     /// Get the index of the next lower value inside the vector
-    /// 
+    ///
     /// This will never return the last index of the vector.
+    /// when x is out of bounds it will either return index 0 or self.len() - 2
+    ///
     /// # Warning
-    /// this method requires the [`monotonic_prop`] to be 
+    /// this method requires the [`monotonic_prop`] to be
     /// `Monotonic::Rising { strict: true }`
     /// otherwise the behaviour is undefined
     fn get_lower_index(&self, x: T) -> usize;
@@ -22,8 +24,8 @@ pub(crate) enum Monotonic {
     Falling { strict: bool },
     NotMonotonic,
 }
-use Monotonic::*;
 use num_traits::{cast, Num, NumCast};
+use Monotonic::*;
 
 use crate::interp1d::Linear;
 
@@ -97,7 +99,7 @@ where
     }
 
     fn get_lower_index(&self, x: S::Elem) -> usize {
-        // the vector should be strictly monotonic rising, otherwise we will 
+        // the vector should be strictly monotonic rising, otherwise we will
         // produce grabage
         //
         // We assume that the spacing is even. So we can calculate the index
@@ -107,15 +109,13 @@ where
         while range.0 + 1 < range.1 {
             let p1 = (
                 self[range.0],
-                cast(range.0).unwrap_or_else(|| {
-                    unimplemented!("casting from usize should always work!")
-                }),
+                cast(range.0)
+                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
             );
             let p2 = (
                 self[range.1],
-                cast(range.1).unwrap_or_else(|| {
-                    unimplemented!("casting from usize should always work!")
-                }),
+                cast(range.1)
+                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
             );
 
             let mid = Linear::calc_frac(p1, p2, x);
@@ -125,9 +125,8 @@ where
                 return 0;
             }
 
-            let mut mid_idx: usize = cast(mid).unwrap_or_else(|| {
-                unimplemented!("mid is positive, so this should work always")
-            });
+            let mut mid_idx: usize = cast(mid)
+                .unwrap_or_else(|| unimplemented!("mid is positive, so this should work always"));
             if mid_idx == range.1 {
                 mid_idx -= 1;
             };

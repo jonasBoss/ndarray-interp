@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, Array1, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix1, Ix2, NdIndex, OwnedRepr, RemoveAxis, Slice,
+    IntoDimension, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
 

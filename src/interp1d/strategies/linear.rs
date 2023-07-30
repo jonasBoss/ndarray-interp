@@ -72,15 +72,12 @@ where
 
 impl Linear {
     /// linearly interpolate/exrapolate between two points
-    pub(crate) fn calc_frac<T>(
-        (x1, y1): (T, T),
-        (x2, y2): (T, T),
-        x: T,
-    ) -> T 
-    where T: Num + Copy,
+    pub(crate) fn calc_frac<T>((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T
+    where
+        T: Num + Copy,
     {
         let b = y1;
         let m = (y2 - y1) / (x2 - x1);
         m * (x - x1) + b
-    }    
+    }
 }
