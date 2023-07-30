@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{ArrayBase, ArrayViewMut, Data, Dimension, Ix1};
+use ndarray::{ArrayBase, ArrayViewMut, Data, Dimension, Ix1, RemoveAxis};
 use num_traits::{Num, NumCast};
 
 use crate::{BuilderError, InterpolateError};
@@ -17,7 +17,8 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
+    D::Smaller: RemoveAxis,
 {
     const MINIMUM_DATA_LENGHT: usize;
     type FinishedStrat: Strategy<Sd, Sx, Sy, D>;
@@ -36,7 +37,8 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
+    D::Smaller: RemoveAxis,
     Self: Sized,
 {
     fn interp_into(

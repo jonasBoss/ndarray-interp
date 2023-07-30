@@ -1,7 +1,9 @@
 use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{Data, Dimension};
+use ndarray::{Data, Dimension, RemoveAxis, Zip};
 use num_traits::{Num, NumCast};
+
+use crate::{interp1d::Linear, InterpolateError};
 
 use super::{Strategy, StrategyBuilder};
 
@@ -13,7 +15,8 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
+    D::Smaller: RemoveAxis,
 {
     const MINIMUM_DATA_LENGHT: usize = 2;
 
@@ -21,11 +24,11 @@ where
 
     fn build(
         self,
-        x: &ndarray::ArrayBase<Sx, ndarray::Ix1>,
-        y: &ndarray::ArrayBase<Sy, ndarray::Ix1>,
-        data: &ndarray::ArrayBase<Sd, D>,
+        _x: &ndarray::ArrayBase<Sx, ndarray::Ix1>,
+        _y: &ndarray::ArrayBase<Sy, ndarray::Ix1>,
+        _data: &ndarray::ArrayBase<Sd, D>,
     ) -> Result<Self::FinishedStrat, crate::BuilderError> {
-        todo!()
+        Ok(self)
     }
 }
 
@@ -35,7 +38,8 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
+    D::Smaller: RemoveAxis,
 {
     fn interp_into(
         &self,
@@ -44,6 +48,33 @@ where
         x: <Sx>::Elem,
         y: <Sy>::Elem,
     ) -> Result<(), crate::InterpolateError> {
-        todo!()
+        if !interpolator.is_x_in_range(x) {
+            return Err(InterpolateError::OutOfBounds(format!(
+                "x = {x:?} is not in range"
+            )));
+        }
+        if !interpolator.is_y_in_range(y) {
+            return Err(InterpolateError::OutOfBounds(format!(
+                "y = {y:?} is not in range"
+            )));
+        }
+
+        let (x_idx, y_idx) = interpolator.get_index_left_of(x, y);
+        let (x1, y1, z11) = interpolator.index_point(x_idx, y_idx);
+        let (_, _, z12) = interpolator.index_point(x_idx, y_idx + 1);
+        let (_, _, z21) = interpolator.index_point(x_idx + 1, y_idx);
+        let (x2, y2, z22) = interpolator.index_point(x_idx + 1, y_idx + 1);
+
+        Zip::from(target)
+            .and(z11)
+            .and(z12)
+            .and(z21)
+            .and(z22)
+            .for_each(|z, &z11, &z12, &z21, &z22| {
+                let z1 = Linear::calc_frac((x1, z11), (x2, z12), x);
+                let z2 = Linear::calc_frac((x1, z21), (x2, z22), x);
+                *z = Linear::calc_frac((y1, z1), (y2, z2), y)
+            });
+        Ok(())
     }
 }
