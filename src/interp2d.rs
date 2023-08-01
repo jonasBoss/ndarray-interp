@@ -99,7 +99,7 @@ where
     /// Calculate the interpolated values at `(x, y)`.
     /// Returns the interpolated data in an array two dimensions smaller than
     /// the data dimension.
-    /// 
+    ///
     /// Concider using [`interp_scalar(x, y)`](Interp2D::interp_scalar)
     /// when the data dimension is [`type@Ix2`]
     pub fn interp(
@@ -119,16 +119,16 @@ where
     }
 
     /// Calculate the interpolated values at all points in `(xs, ys)`
-    /// 
+    ///
     /// # Dimensions
-    /// given the data dimension `N` and the query dimension `M` the return array 
-    /// will have the dimension `M + N - 2` where the fist `M` dimensions correspond 
+    /// given the data dimension `N` and the query dimension `M` the return array
+    /// will have the dimension `M + N - 2` where the fist `M` dimensions correspond
     /// to the query dimenions of `xs` and `ys`
-    /// 
-    /// Lets assume we hava a data dimension of `N = (2, 3, 4, 5)` and query this data 
+    ///
+    /// Lets assume we hava a data dimension of `N = (2, 3, 4, 5)` and query this data
     /// with an array of dimension `M = (10)`, the return dimension will be `(10, 4, 5)`
     /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
-    /// 
+    ///
     /// # panics
     /// when `xs.shape() != ys.shape()`
     pub fn interp_array<Sqx, Sqy, Dq>(
@@ -146,7 +146,10 @@ where
         Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
     {
         let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
-        assert!(xs.shape() == ys.shape(), "`xs.shape()` and `ys.shape()` do not match");
+        assert!(
+            xs.shape() == ys.shape(),
+            "`xs.shape()` and `ys.shape()` do not match"
+        );
         dim.as_array_view_mut()
             .into_iter()
             .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
@@ -187,7 +190,7 @@ where
     }
 
     /// get `(x, y, data)` coordinate at the given index
-    /// 
+    ///
     /// # panics
     /// when index out of bounds
     pub fn index_point(
@@ -230,10 +233,10 @@ where
     }
 
     pub fn is_x_in_range(&self, x: Sx::Elem) -> bool {
-        self.x[0] <= x && x <= self.x[self.x.len() -1]
+        self.x[0] <= x && x <= self.x[self.x.len() - 1]
     }
     pub fn is_y_in_range(&self, y: Sy::Elem) -> bool {
-        self.y[0] <= y && y <= self.y[self.y.len() -1]
+        self.y[0] <= y && y <= self.y[self.y.len() - 1]
     }
 }
 
@@ -304,7 +307,7 @@ where
         }
     }
 
-    /// Add an custom x axis for the data. 
+    /// Add an custom x axis for the data.
     /// The axis must have the same lenght as the first axis of the data.
     pub fn x<NewSx: Data<Elem = Sd::Elem>>(
         self,
@@ -321,7 +324,7 @@ where
         }
     }
 
-    /// Add an custom y axis for the data. 
+    /// Add an custom y axis for the data.
     /// The axis must have the same lenght as the second axis of the data.
     pub fn y<NewSy: Data<Elem = Sd::Elem>>(
         self,

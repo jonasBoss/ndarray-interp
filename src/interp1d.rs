@@ -260,7 +260,7 @@ where
 }
 
 /// Create and configure a [Interp1D] Interpolator.
-/// 
+///
 /// # Default configuration
 /// In the default configuration the interpolation strategy is [`Linear{extrapolate: false}`].
 /// The data will be interpolated along [`Axis(0)`] (currently this can not be changed).
