@@ -1,3 +1,12 @@
+//! A collection of structs and traits to interpolate data along the first two axis
+//!
+//! # Interpolator
+//!  - [`Interp2D`] The interpolator used with any strategy
+//!  - [`Interp2DBuilder`] Configure the interpolator
+//!
+//! # Strategies
+//!  - [`Biliniar`] Linear interpolation strategy
+
 use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
@@ -15,6 +24,7 @@ use self::strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
 
 mod strategies;
 
+/// Two dimensional interpolator
 #[derive(Debug)]
 pub struct Interp2D<Sd, Sx, Sy, D, Strat>
 where
@@ -36,6 +46,7 @@ where
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
     D: Dimension,
 {
+    /// Get the [Interp2DBuilder]
     pub fn builder(
         data: ArrayBase<Sd, D>,
     ) -> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar> {
@@ -51,6 +62,25 @@ where
     Sy: Data<Elem = Sd::Elem>,
     Strat: Interp2DStrategy<Sd, Sx, Sy, Ix2>,
 {
+    /// convinient interpolation function for interpolation at one point
+    /// when the data dimension is [`type@Ix2`]
+    ///
+    /// ```rust
+    /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp2d::*;
+    /// # use ndarray::*;
+    /// # use approx::*;
+    /// let data = array![
+    ///     [1.0, 2.0],
+    ///     [3.0, 4.0],
+    /// ];
+    /// let (qx, qy) = (0.0, 0.5);
+    /// let expected = 1.5;
+    ///
+    /// let interpolator = Interp2D::builder(data).build().unwrap();
+    /// let result = interpolator.interp_scalar(qx, qy).unwrap();
+    /// # assert_eq!(result, expected);
+    /// ```
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
         Ok(*self.interp(x, y)?.first().unwrap_or_else(|| unreachable!()))
     }
@@ -66,6 +96,12 @@ where
     D::Smaller: RemoveAxis,
     Strat: Interp2DStrategy<Sd, Sx, Sy, D>,
 {
+    /// Calculate the interpolated values at `(x, y)`.
+    /// Returns the interpolated data in an array two dimensions smaller than
+    /// the data dimension.
+    /// 
+    /// Concider using [`interp_scalar(x, y)`](Interp2D::interp_scalar)
+    /// when the data dimension is [`type@Ix2`]
     pub fn interp(
         &self,
         x: Sx::Elem,
@@ -82,6 +118,19 @@ where
             .map(|_| target)
     }
 
+    /// Calculate the interpolated values at all points in `(xs, ys)`
+    /// 
+    /// # Dimensions
+    /// given the data dimension `N` and the query dimension `M` the return array 
+    /// will have the dimension `M + N - 2` where the fist `M` dimensions correspond 
+    /// to the query dimenions of `xs` and `ys`
+    /// 
+    /// Lets assume we hava a data dimension of `N = (2, 3, 4, 5)` and query this data 
+    /// with an array of dimension `M = (10)`, the return dimension will be `(10, 4, 5)`
+    /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
+    /// 
+    /// # panics
+    /// when `xs.shape() != ys.shape()`
     pub fn interp_array<Sqx, Sqy, Dq>(
         &self,
         xs: &ArrayBase<Sqx, Dq>,
@@ -97,7 +146,7 @@ where
         Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
     {
         let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
-        assert!(xs.shape() == ys.shape());
+        assert!(xs.shape() == ys.shape(), "`xs.shape()` and `ys.shape()` do not match");
         dim.as_array_view_mut()
             .into_iter()
             .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
@@ -137,6 +186,10 @@ where
         Ok(zs)
     }
 
+    /// get `(x, y, data)` coordinate at the given index
+    /// 
+    /// # panics
+    /// when index out of bounds
     pub fn index_point(
         &self,
         x_idx: usize,
@@ -153,12 +206,12 @@ where
                 .slice_each_axis(|AxisDescription { axis, .. }| match axis {
                     Axis(0) => Slice {
                         start: x_idx as isize,
-                        end: Some(x_idx as isize),
+                        end: Some(x_idx as isize + 1),
                         step: 1,
                     },
                     Axis(1) => Slice {
                         start: y_idx as isize,
-                        end: Some(y_idx as isize),
+                        end: Some(y_idx as isize + 1),
                         step: 1,
                     },
                     _ => Slice::from(..),
@@ -177,13 +230,14 @@ where
     }
 
     pub fn is_x_in_range(&self, x: Sx::Elem) -> bool {
-        self.x[0] <= x && x <= self.x[self.x.len()]
+        self.x[0] <= x && x <= self.x[self.x.len() -1]
     }
     pub fn is_y_in_range(&self, y: Sy::Elem) -> bool {
-        self.y[0] <= y && y <= self.y[self.y.len()]
+        self.y[0] <= y && y <= self.y[self.y.len() -1]
     }
 }
 
+/// Create and configure a [Interp2D] interpolator.
 #[derive(Debug)]
 pub struct Interp2DBuilder<Sd, Sx, Sy, D, Strat>
 where
@@ -235,6 +289,8 @@ where
     D::Smaller: RemoveAxis,
     Strat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>,
 {
+    /// Set the interpolation strategy by provideing a [`Interp2DStrategyBuilder`].
+    /// By default [`Biliniar`] is used.
     pub fn strategy<NewStrat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>>(
         self,
         strategy: NewStrat,
@@ -248,6 +304,8 @@ where
         }
     }
 
+    /// Add an custom x axis for the data. 
+    /// The axis must have the same lenght as the first axis of the data.
     pub fn x<NewSx: Data<Elem = Sd::Elem>>(
         self,
         x: ArrayBase<NewSx, Ix1>,
@@ -263,6 +321,8 @@ where
         }
     }
 
+    /// Add an custom y axis for the data. 
+    /// The axis must have the same lenght as the second axis of the data.
     pub fn y<NewSy: Data<Elem = Sd::Elem>>(
         self,
         y: ArrayBase<NewSy, Ix1>,
@@ -278,6 +338,7 @@ where
         }
     }
 
+    /// Validate the input and create the configured [`Interp2D`]
     pub fn build(self) -> Result<Interp2D<Sd, Sx, Sy, D, Strat::FinishedStrat>, BuilderError> {
         use self::Monotonic::*;
         use BuilderError::*;
@@ -298,16 +359,6 @@ where
         if data.shape()[1] < Strat::MINIMUM_DATA_LENGHT {
             return Err(NotEnoughData(format!("The 1-dimension has not enough data for the chosen interpolation strategy. Provided: {}, Reqired: {}", data.shape()[1], Strat::MINIMUM_DATA_LENGHT)));
         }
-        if !matches!(x.monotonic_prop(), Rising { strict: true }) {
-            return Err(Monotonic(
-                "The x-axis needs to be strictly monotonic rising".into(),
-            ));
-        }
-        if !matches!(y.monotonic_prop(), Rising { strict: true }) {
-            return Err(Monotonic(
-                "The y-axis needs to be strictly monotonic rising".into(),
-            ));
-        }
         if x.len() != data.shape()[0] {
             return Err(AxisLenght(format!(
                 "Lenghts of x-axis and data-0-axis need to match. Got x: {}, data-0: {}",
@@ -321,6 +372,16 @@ where
                 y.len(),
                 data.shape()[1]
             )));
+        }
+        if !matches!(x.monotonic_prop(), Rising { strict: true }) {
+            return Err(Monotonic(
+                "The x-axis needs to be strictly monotonic rising".into(),
+            ));
+        }
+        if !matches!(y.monotonic_prop(), Rising { strict: true }) {
+            return Err(Monotonic(
+                "The y-axis needs to be strictly monotonic rising".into(),
+            ));
         }
 
         let strategy = stratgy_builder.build(&x, &y, &data)?;
