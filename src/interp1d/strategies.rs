@@ -25,7 +25,7 @@ where
 
     /// initialize the strategy by validating data and
     /// possibly calculating coefficients
-    /// This method is called by [`Interp1DBuilder::build`](crate::interp1d::Interp1DBuilder::build)
+    /// This method is called in [`Interp1DBuilder::build`](crate::interp1d::Interp1DBuilder::build)
     ///
     /// When this method is called by [`Interp1DBuilder`](crate::interp1d::Interp1DBuilder) the
     /// following properties are guaranteed:

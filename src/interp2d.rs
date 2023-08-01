@@ -4,6 +4,10 @@
 //!  - [`Interp2D`] The interpolator used with any strategy
 //!  - [`Interp2DBuilder`] Configure the interpolator
 //!
+//! # Traits
+//!  - [`Interp2DStrategy`] The trait used to specialize [`Interp2D`] with the correct strategy
+//!  - [`Interp2DStrategyBuilder`] The trait used to specialize [`Interp2DBuilder`] to initialize the correct strategy
+//! 
 //! # Strategies
 //!  - [`Biliniar`] Linear interpolation strategy
 
@@ -20,9 +24,8 @@ use crate::{
     BuilderError, InterpolateError,
 };
 
-use self::strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
-
 mod strategies;
+pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
 
 /// Two dimensional interpolator
 #[derive(Debug)]
