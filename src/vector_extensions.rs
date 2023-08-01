@@ -1,24 +1,38 @@
 use ndarray::{ArrayBase, Data, Ix1};
 
 /// Helper methods for one dimensional arrays
-pub trait VectorExtensions {
+pub(crate) trait VectorExtensions<T> {
     /// get the monotonic property of the vector
     fn monotonic_prop(&self) -> Monotonic;
+
+    /// Get the index of the next lower value inside the vector
+    ///
+    /// This will never return the last index of the vector.
+    /// when x is out of bounds it will either return index 0 or self.len() - 2
+    ///
+    /// # Warning
+    /// this method requires the [`monotonic_prop`] to be
+    /// `Monotonic::Rising { strict: true }`
+    /// otherwise the behaviour is undefined
+    fn get_lower_index(&self, x: T) -> usize;
 }
 
 /// Describes the monotonic property of a vector
 #[derive(Debug)]
-pub enum Monotonic {
+pub(crate) enum Monotonic {
     Rising { strict: bool },
     Falling { strict: bool },
     NotMonotonic,
 }
+use num_traits::{cast, Num, NumCast};
 use Monotonic::*;
 
-impl<S> VectorExtensions for ArrayBase<S, Ix1>
+use crate::interp1d::Linear;
+
+impl<S> VectorExtensions<S::Elem> for ArrayBase<S, Ix1>
 where
     S: Data,
-    S::Elem: PartialOrd,
+    S::Elem: PartialOrd + Num + NumCast + Copy,
 {
     fn monotonic_prop(&self) -> Monotonic {
         if self.len() <= 1 {
@@ -82,6 +96,65 @@ where
         } else {
             NotMonotonic
         }
+    }
+
+    fn get_lower_index(&self, x: S::Elem) -> usize {
+        // the vector should be strictly monotonic rising, otherwise we will
+        // produce grabage
+        //
+        // We assume that the spacing is even. So we can calculate the index
+        // and check it. This finishes in O(1) for even spaced axis.
+        // Otherwise we do a binary search with O(log n)
+        let mut range = (0usize, self.len() - 1);
+        while range.0 + 1 < range.1 {
+            let p1 = (
+                self[range.0],
+                cast(range.0)
+                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
+            );
+            let p2 = (
+                self[range.1],
+                cast(range.1)
+                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
+            );
+
+            let mid = Linear::calc_frac(p1, p2, x);
+            if mid < cast(0).unwrap_or_else(|| unimplemented!()) {
+                // neagtive values might occure when extrapolating. index 0 is
+                // the guaranteed solution
+                return 0;
+            }
+
+            let mut mid_idx: usize = cast(mid)
+                .unwrap_or_else(|| unimplemented!("mid is positive, so this should work always"));
+            if mid_idx == range.1 {
+                mid_idx -= 1;
+            };
+            let mut mid_x = self[mid_idx];
+
+            if mid_x <= x && x <= self[mid_idx + 1] {
+                return mid_idx;
+            }
+            if mid_x < x {
+                range.0 = mid_idx;
+            } else {
+                range.1 = mid_idx;
+            }
+
+            // the above alone has the potential to end in an infinte loop
+            // do a binary search step to guarantee progress
+            mid_idx = (range.1 - range.0) / 2 + range.0;
+            mid_x = self[mid_idx];
+            if mid_x == x {
+                return mid_idx;
+            }
+            if mid_x < x {
+                range.0 = mid_idx;
+            } else {
+                range.1 = mid_idx;
+            }
+        }
+        range.0
     }
 }
 

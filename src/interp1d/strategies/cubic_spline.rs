@@ -10,7 +10,7 @@ use num_traits::{cast, Num, NumCast, Pow};
 
 use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
-use super::{Strategy, StrategyBuilder};
+use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
@@ -49,7 +49,7 @@ const AX0: Axis = Axis(0);
 /// ```
 #[derive(Debug)]
 pub struct CubicSpline;
-impl<Sd, Sx, D> StrategyBuilder<Sd, Sx, D> for CubicSpline
+impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline
 where
     Sd: Data,
     Sd::Elem: Debug
@@ -256,7 +256,7 @@ where
     b: Array<Sd::Elem, D>,
 }
 
-impl<Sd, Sx, D> Strategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
+impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,

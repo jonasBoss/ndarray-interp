@@ -5,13 +5,10 @@
 //! The ndarray-interp crate provides interpolation algorithms
 //! for interpolating _n_-dimesional data.
 //!
-//! [interp1d::Interp1D] provides functionality to interpolate _n_-dimensional
-//! arrays along the first axis. The documentation of the different
-//! interpolation methods provide examples.
+//! 1D and 2D interpolation is supported. See the modules [interp1d] and [interp2d]
 //!
 //! # Custom interpolation strategy
-//! This crate defines the traits [`StrategyBuilder`](interp1d::StrategyBuilder)
-//! and [`Strategy`](interp1d::Strategy) that allow implementation of user
+//! This crate defines traits to allow implementation of user
 //! defined interpolation algorithms.
 //! see the `custom_strategy.rs` example.
 //!

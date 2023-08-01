@@ -12,7 +12,7 @@ mod linear;
 pub use cubic_spline::CubicSpline;
 pub use linear::Linear;
 
-pub trait StrategyBuilder<Sd, Sx, D>
+pub trait Interp1DStrategyBuilder<Sd, Sx, D>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
@@ -21,11 +21,11 @@ where
     Self: Sized,
 {
     const MINIMUM_DATA_LENGHT: usize;
-    type FinishedStrat: Strategy<Sd, Sx, D>;
+    type FinishedStrat: Interp1DStrategy<Sd, Sx, D>;
 
     /// initialize the strategy by validating data and
     /// possibly calculating coefficients
-    /// This method is called by [`Interp1DBuilder::build`](crate::interp1d::Interp1DBuilder::build)
+    /// This method is called in [`Interp1DBuilder::build`](crate::interp1d::Interp1DBuilder::build)
     ///
     /// When this method is called by [`Interp1DBuilder`](crate::interp1d::Interp1DBuilder) the
     /// following properties are guaranteed:
@@ -42,7 +42,7 @@ where
         Sx2: Data<Elem = Sd::Elem>;
 }
 
-pub trait Strategy<Sd, Sx, D>
+pub trait Interp1DStrategy<Sd, Sx, D>
 where
     Sd: Data,
     Sd::Elem: Num + Debug,
