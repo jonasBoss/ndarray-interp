@@ -7,7 +7,7 @@
 //! # Traits
 //!  - [`Interp1DStrategy`] The trait used to specialize [`Interp1D`] with the correct strategy
 //!  - [`Interp1DStrategyBuilder`] The trait used to specialize [`Interp1DBuilder`] to initialize the correct strategy
-//! 
+//!
 //! # Strategies
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy

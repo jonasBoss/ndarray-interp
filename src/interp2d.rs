@@ -7,7 +7,7 @@
 //! # Traits
 //!  - [`Interp2DStrategy`] The trait used to specialize [`Interp2D`] with the correct strategy
 //!  - [`Interp2DStrategyBuilder`] The trait used to specialize [`Interp2DBuilder`] to initialize the correct strategy
-//! 
+//!
 //! # Strategies
 //!  - [`Biliniar`] Linear interpolation strategy
 
