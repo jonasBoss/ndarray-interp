@@ -269,10 +269,9 @@ where
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-        if !(interp.range.0 <= x && x <= interp.range.1) {
+        if !interp.is_in_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
-                "x = {x:#?} is not in range of {:#?}",
-                interp.range
+                "x = {x:#?} is not in range",
             )));
         }
 

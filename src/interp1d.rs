@@ -39,11 +39,9 @@ where
     Strat: Interp1DStrategy<Sd, Sx, D>,
 {
     /// x values are guaranteed to be strict monotonically rising
-    /// if x is None, the x values are assumed to be the index of data
-    x: Option<ArrayBase<Sx, Ix1>>,
+    x: ArrayBase<Sx, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
-    range: (Sx::Elem, Sx::Elem),
 }
 
 impl<Sd, Sx, Strat> Interp1D<Sd, Sx, Ix1, Strat>
@@ -234,10 +232,7 @@ where
     /// when index out of bounds
     pub fn index_point(&self, index: usize) -> (Sx::Elem, ArrayView<Sd::Elem, D::Smaller>) {
         let view = self.data.index_axis(Axis(0), index);
-        match &self.x {
-            Some(x) => (x[index], view),
-            None => (NumCast::from(index).unwrap_or_else(|| unreachable!()), view),
-        }
+        (self.x[index], view)
     }
 
     /// The index of a known value left of, or at x.
@@ -245,21 +240,11 @@ where
     /// This will never return the right most index,
     /// so calling [`index_point(idx+1)`](Interp1D::index_point) is always safe.
     pub fn get_index_left_of(&self, x: Sx::Elem) -> usize {
-        if let Some(xs) = &self.x {
-            xs.get_lower_index(x)
-        } else if x < NumCast::from(0).unwrap_or_else(|| unimplemented!()) {
-            0
-        } else {
-            // this relies on the fact that float -> int cast will return the next lower int
-            // for positive values
-            let x = NumCast::from(x)
-                .unwrap_or_else(|| unimplemented!("x is positive, so this should always work"));
-            if x >= self.data.shape()[0] - 1 {
-                self.data.shape()[0] - 2
-            } else {
-                x
-            }
-        }
+        self.x.get_lower_index(x)
+    }
+
+    pub fn is_in_range(&self, x: Sx::Elem) -> bool {
+        self.x[0] <= x && x <= self.x[self.x.len() - 1]
     }
 }
 
@@ -277,7 +262,7 @@ where
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
 {
-    x: Option<ArrayBase<Sx, Ix1>>,
+    x: ArrayBase<Sx, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
 }
@@ -293,8 +278,13 @@ where
     /// Linear Interpolation without extrapolation. As x axis the index to the data will be used.
     /// On multidimensional data interpolation happens along the first axis.
     pub fn new(data: ArrayBase<Sd, D>) -> Self {
+        let len = data.shape()[0];
         Interp1DBuilder {
-            x: None,
+            x: Array::from_iter((0..len).map(|n| {
+                cast(n).unwrap_or_else(|| {
+                    unimplemented!("casting from usize to a number should always work")
+                })
+            })),
             data,
             strategy: Linear { extrapolate: false },
         }
@@ -317,11 +307,7 @@ where
         NewSx: Data<Elem = Sd::Elem>,
     {
         let Interp1DBuilder { data, strategy, .. } = self;
-        Interp1DBuilder {
-            x: Some(x),
-            data,
-            strategy,
-        }
+        Interp1DBuilder { x, data, strategy }
     }
 
     /// Set the interpolation strategy by providing a [Interp1DStrategyBuilder].
@@ -338,68 +324,34 @@ where
     pub fn build(self) -> Result<Interp1D<Sd, Sx, D, Strat::FinishedStrat>, BuilderError> {
         use self::Monotonic::*;
         use BuilderError::*;
-        if self.data.ndim() < 1 {
+
+        let Interp1DBuilder { x, data, strategy } = self;
+
+        if data.ndim() < 1 {
             return Err(DimensionError(
                 "data dimension is 0, needs to be at least 1".into(),
             ));
         }
-        if self.data.shape()[0] < Strat::MINIMUM_DATA_LENGHT {
+        if data.shape()[0] < Strat::MINIMUM_DATA_LENGHT {
             return Err(NotEnoughData(format!(
                 "The chosen Interpolation strategy needs at least {} data points",
                 Strat::MINIMUM_DATA_LENGHT
             )));
         }
-
-        if let Some(x) = &self.x {
-            match x.monotonic_prop() {
-                Rising { strict: true } => Ok(()),
-                _ => Err(Monotonic(
-                    "Values in the x axis need to be strictly monotonic rising".into(),
-                )),
-            }?;
-            if *self
-                .data
-                .raw_dim()
-                .as_array_view()
-                .get(0)
-                .unwrap_or_else(|| unreachable!())
-                != x.len()
-            {
-                return Err(BuilderError::AxisLenght(format!(
-                    "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
-                    x.len(),
-                    self.data.len()
-                )));
-            };
+        if !matches!(x.monotonic_prop(), Rising { strict: true }) {
+            return Err(Monotonic(
+                "Values in the x axis need to be strictly monotonic rising".into(),
+            ));
         }
-        let range = match &self.x {
-            Some(x) => (
-                *x.first().unwrap_or_else(|| unreachable!()),
-                *x.last().unwrap_or_else(|| unreachable!()),
-            ),
-            None => (
-                NumCast::from(0).unwrap_or_else(|| unimplemented!()),
-                NumCast::from(self.data.len() - 1).unwrap_or_else(|| unimplemented!()),
-            ),
-        };
+        if x.len() != data.shape()[0] {
+            return Err(BuilderError::AxisLenght(format!(
+                "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
+                x.len(),
+                data.shape()[0],
+            )));
+        }
 
-        let strategy = match self.x.as_ref() {
-            Some(x) => self.strategy.build(x, &self.data)?,
-            None => {
-                let len = self.data.raw_dim()[0];
-                let x = Array::from_iter((0..len).map(|n| {
-                    cast(n).unwrap_or_else(|| {
-                        unimplemented!("casting from usize to a number should always work")
-                    })
-                }));
-                self.strategy.build(&x, &self.data)?
-            }
-        };
-        Ok(Interp1D {
-            x: self.x,
-            data: self.data,
-            strategy,
-            range,
-        })
+        let strategy = strategy.build(&x, &data)?;
+        Ok(Interp1D { x, data, strategy })
     }
 }

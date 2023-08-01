@@ -235,10 +235,10 @@ where
         (self.x.get_lower_index(x), self.y.get_lower_index(y))
     }
 
-    pub fn is_x_in_range(&self, x: Sx::Elem) -> bool {
+    pub fn is_in_x_range(&self, x: Sx::Elem) -> bool {
         self.x[0] <= x && x <= self.x[self.x.len() - 1]
     }
-    pub fn is_y_in_range(&self, y: Sy::Elem) -> bool {
+    pub fn is_in_y_range(&self, y: Sy::Elem) -> bool {
         self.y[0] <= y && y <= self.y[self.y.len() - 1]
     }
 }

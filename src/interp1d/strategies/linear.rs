@@ -48,10 +48,9 @@ where
         x: Sx::Elem,
     ) -> Result<(), InterpolateError> {
         let this = interpolator;
-        if !self.extrapolate && !(this.range.0 <= x && x <= this.range.1) {
+        if !self.extrapolate && !this.is_in_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
-                "x = {x:#?} is not in range of {:#?}",
-                this.range
+                "x = {x:#?} is not in range",
             )));
         }
 

@@ -48,12 +48,12 @@ where
         x: <Sx>::Elem,
         y: <Sy>::Elem,
     ) -> Result<(), crate::InterpolateError> {
-        if !interpolator.is_x_in_range(x) {
+        if !interpolator.is_in_x_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:?} is not in range"
             )));
         }
-        if !interpolator.is_y_in_range(y) {
+        if !interpolator.is_in_y_range(y) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "y = {y:?} is not in range"
             )));

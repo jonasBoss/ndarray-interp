@@ -101,7 +101,16 @@ where
     fn get_lower_index(&self, x: S::Elem) -> usize {
         // the vector should be strictly monotonic rising, otherwise we will
         // produce grabage
-        //
+
+        // check in range, otherwise return the first or second last index
+        // this allows for extrapolation
+        if x <= self[0] {
+            return 0;
+        }
+        if x >= self[self.len() - 1] {
+            return self.len() - 2;
+        }
+
         // We assume that the spacing is even. So we can calculate the index
         // and check it. This finishes in O(1) for even spaced axis.
         // Otherwise we do a binary search with O(log n)
@@ -119,12 +128,6 @@ where
             );
 
             let mid = Linear::calc_frac(p1, p2, x);
-            if mid < cast(0).unwrap_or_else(|| unimplemented!()) {
-                // neagtive values might occure when extrapolating. index 0 is
-                // the guaranteed solution
-                return 0;
-            }
-
             let mut mid_idx: usize = cast(mid)
                 .unwrap_or_else(|| unimplemented!("mid is positive, so this should work always"));
             if mid_idx == range.1 {
