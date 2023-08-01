@@ -7,7 +7,7 @@ use ndarray_interp::{BuilderError, InterpolateError};
 fn interp() {
     let data = array![1.0, 2.0, 3.0, 4.0, 3.0, 2.0, 1.0, 0.0, 2.0, 4.0, 6.0, 8.0];
     let interp = Interp1D::builder(data)
-        .strategy(CubicSpline)
+        .strategy(CubicSpline::new())
         .build()
         .unwrap();
     let q = Array1::linspace(0.0, 11.0, 30);
@@ -52,7 +52,7 @@ fn interp() {
 #[test]
 fn to_little_data() {
     let err = Interp1D::builder(array![1.0, 2.0])
-        .strategy(CubicSpline)
+        .strategy(CubicSpline::new())
         .build();
     assert!(matches!(err, Err(BuilderError::NotEnoughData(_))));
 }
@@ -60,7 +60,7 @@ fn to_little_data() {
 #[test]
 fn enough_data() {
     Interp1D::builder(array![1.0, 2.0, 1.0])
-        .strategy(CubicSpline)
+        .strategy(CubicSpline::new())
         .build()
         .unwrap();
 }
@@ -68,7 +68,7 @@ fn enough_data() {
 #[test]
 fn extrapolate() {
     let interp = Interp1D::builder(array![1.0, 2.0, 1.0])
-        .strategy(CubicSpline)
+        .strategy(CubicSpline::new())
         .build()
         .unwrap();
     let err = interp.interp_scalar(-0.5);

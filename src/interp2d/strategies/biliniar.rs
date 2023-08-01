@@ -78,3 +78,9 @@ where
         Ok(())
     }
 }
+
+impl Biliniar {
+    pub fn new() -> Self {
+        Self
+    }
+}

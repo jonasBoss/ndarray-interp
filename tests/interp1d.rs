@@ -32,7 +32,7 @@ fn interp_y_only() {
 #[test]
 fn extrapolate_y_only() {
     let interp = Interp1D::builder(array![1.0, 2.0, 1.5])
-        .strategy(Linear { extrapolate: true })
+        .strategy(Linear::new().extrapolate(true))
         .build()
         .unwrap();
     assert_eq!(*interp.interp(-1.0).unwrap().first().unwrap(), 0.0);
@@ -43,7 +43,7 @@ fn extrapolate_y_only() {
 fn interp_with_x_and_y() {
     let interp = Interp1DBuilder::new(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
         .x(array![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
-        .strategy(Linear { extrapolate: false })
+        .strategy(Linear::new())
         .build()
         .unwrap();
     assert_eq!(*interp.interp(-4.0).unwrap().first().unwrap(), 1.5);
@@ -59,7 +59,7 @@ fn interp_with_x_and_y_expspaced() {
         .x(array![
             1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0
         ])
-        .strategy(Linear { extrapolate: false })
+        .strategy(Linear::new())
         .build()
         .unwrap();
     assert_eq!(*interp.interp(1.0).unwrap().first().unwrap(), 1.0);
@@ -72,7 +72,7 @@ fn interp_with_x_and_y_expspaced() {
 fn extrapolate_with_x_and_y() {
     let interp = Interp1DBuilder::new(array![1.0, 0.0, 1.5])
         .x(array![0.0, 1.0, 1.5])
-        .strategy(Linear { extrapolate: true })
+        .strategy(Linear::new().extrapolate(true))
         .build()
         .unwrap();
     assert_eq!(*interp.interp(-1.0).unwrap().first().unwrap(), 2.0);
@@ -106,7 +106,7 @@ fn interp_y_only_out_of_bounds() {
 fn interp_with_x_and_y_out_of_bounds() {
     let interp = Interp1DBuilder::new(array![1.0, 2.0, 3.0])
         .x(array![-4.0, -3.0, 2.0])
-        .strategy(Linear { extrapolate: false })
+        .strategy(Linear::new())
         .build()
         .unwrap();
     assert!(matches!(

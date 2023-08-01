@@ -10,7 +10,7 @@ use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 /// Linear Interpolation Strategy
 #[derive(Debug)]
 pub struct Linear {
-    pub extrapolate: bool,
+    extrapolate: bool,
 }
 
 impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for Linear
@@ -70,6 +70,17 @@ where
 }
 
 impl Linear {
+    /// create a linear interpolation stratgy
+    pub fn new() -> Self {
+        Self { extrapolate: false }
+    }
+
+    /// set the extrapolate property, default is `false`
+    pub fn extrapolate(mut self, extrapolate: bool) -> Self {
+        self.extrapolate = extrapolate;
+        self
+    }
+
     /// linearly interpolate/exrapolate between two points
     pub(crate) fn calc_frac<T>((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T
     where

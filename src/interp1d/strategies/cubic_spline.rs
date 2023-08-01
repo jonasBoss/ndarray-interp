@@ -244,6 +244,10 @@ impl CubicSpline {
 
         (c_a, c_b)
     }
+
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 #[derive(Debug)]

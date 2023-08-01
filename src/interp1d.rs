@@ -140,7 +140,7 @@ where
     ///
     /// let interpolator = Interp1DBuilder::new(data)
     ///     .x(x)
-    ///     .strategy(Linear{extrapolate: false})
+    ///     .strategy(Linear::new())
     ///     .build().unwrap();
     /// let result = interpolator.interp_array(&query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
@@ -180,7 +180,7 @@ where
     ///
     /// let interpolator = Interp1DBuilder::new(data)
     ///     .x(x)
-    ///     .strategy(Linear{extrapolate: false})
+    ///     .strategy(Linear::new())
     ///     .build().unwrap();
     /// let result = interpolator.interp_array(&query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
@@ -286,7 +286,7 @@ where
                 })
             })),
             data,
-            strategy: Linear { extrapolate: false },
+            strategy: Linear::new(),
         }
     }
 }
