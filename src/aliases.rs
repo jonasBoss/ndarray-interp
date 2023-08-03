@@ -1,4 +1,4 @@
-use ndarray::{OwnedRepr, Ix1, Ix2, ViewRepr, Ix3};
+use ndarray::{Ix1, Ix2, Ix3, OwnedRepr, ViewRepr};
 
 use crate::{interp1d::Interp1D, interp2d::Interp2D};
 
@@ -20,6 +20,6 @@ pub type Interp2DView<A, D, S> = Interp2D<ViewRepr<A>, ViewRepr<A>, ViewRepr<A>,
 /// two-dimensional interpolant for data views and owned axis
 pub type Interp2DDataView<A, D, S> = Interp2D<ViewRepr<A>, OwnedRepr<A>, OwnedRepr<A>, D, S>;
 /// two-dimensional interpolant for scalar, owned data
-pub type Interp2DScalar<A,S> = Interp2DOwned<A, Ix2, S>;
+pub type Interp2DScalar<A, S> = Interp2DOwned<A, Ix2, S>;
 /// two-dimensional interpolant for vectroized, owned data
-pub type Interp2DVec<A,S> = Interp2DOwned<A, Ix3, S>;
+pub type Interp2DVec<A, S> = Interp2DOwned<A, Ix3, S>;
