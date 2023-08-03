@@ -7,6 +7,7 @@ use crate::{interp1d::Linear, InterpolateError};
 
 use super::{Interp2DStrategy, Interp2DStrategyBuilder};
 
+#[derive(Debug)]
 pub struct Biliniar;
 
 impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Biliniar
