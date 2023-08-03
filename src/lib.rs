@@ -17,7 +17,10 @@ use thiserror::Error;
 
 pub mod interp1d;
 pub mod interp2d;
+mod aliases;
 mod vector_extensions;
+
+pub use aliases::*;
 
 /// Errors during Interpolator creation
 #[derive(Debug, Error)]
