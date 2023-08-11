@@ -18,7 +18,7 @@ use thiserror::Error;
 mod aliases;
 pub mod interp1d;
 pub mod interp2d;
-mod vector_extensions;
+pub mod vector_extensions;
 
 pub use aliases::*;
 

@@ -1,7 +1,7 @@
 use ndarray::{ArrayBase, Data, Ix1};
 
-/// Helper methods for one dimensional arrays
-pub(crate) trait VectorExtensions<T> {
+/// Helper methods for one dimensional numeric arrays
+pub trait VectorExtensions<T> {
     /// get the monotonic property of the vector
     fn monotonic_prop(&self) -> Monotonic;
 
@@ -19,7 +19,7 @@ pub(crate) trait VectorExtensions<T> {
 
 /// Describes the monotonic property of a vector
 #[derive(Debug)]
-pub(crate) enum Monotonic {
+pub enum Monotonic {
     Rising { strict: bool },
     Falling { strict: bool },
     NotMonotonic,
