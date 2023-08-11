@@ -15,12 +15,9 @@
 
 use thiserror::Error;
 
-mod aliases;
 pub mod interp1d;
 pub mod interp2d;
 pub mod vector_extensions;
-
-pub use aliases::*;
 
 /// Errors during Interpolator creation
 #[derive(Debug, Error)]

@@ -25,7 +25,9 @@ use crate::{
 };
 
 mod strategies;
+mod aliases;
 pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
+pub use aliases::*;
 
 /// Two dimensional interpolator
 #[derive(Debug)]
