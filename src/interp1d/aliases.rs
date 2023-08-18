@@ -1,4 +1,4 @@
-use ndarray::{Ix2, ViewRepr, OwnedRepr, Ix1};
+use ndarray::{Ix1, Ix2, OwnedRepr, ViewRepr};
 
 use super::Interp1D;
 

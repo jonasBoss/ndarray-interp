@@ -24,10 +24,10 @@ use crate::{
     BuilderError, InterpolateError,
 };
 
-mod strategies;
 mod aliases;
-pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
+mod strategies;
 pub use aliases::*;
+pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
 
 /// Two dimensional interpolator
 #[derive(Debug)]

@@ -25,10 +25,10 @@ use crate::{
     BuilderError, InterpolateError,
 };
 
-mod strategies;
 mod aliases;
-pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
+mod strategies;
 pub use aliases::*;
+pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
 
 /// One dimensional interpolator
 #[derive(Debug)]

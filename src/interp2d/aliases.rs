@@ -1,4 +1,4 @@
-use ndarray::{OwnedRepr, ViewRepr, Ix2, Ix3};
+use ndarray::{Ix2, Ix3, OwnedRepr, ViewRepr};
 
 use super::Interp2D;
 
