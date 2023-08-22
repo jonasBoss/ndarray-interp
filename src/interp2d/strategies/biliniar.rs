@@ -8,7 +8,9 @@ use crate::{interp1d::Linear, InterpolateError};
 use super::{Interp2DStrategy, Interp2DStrategyBuilder};
 
 #[derive(Debug)]
-pub struct Biliniar;
+pub struct Biliniar {
+    extrapolate: bool,
+}
 
 impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Biliniar
 where
@@ -49,12 +51,12 @@ where
         x: <Sx>::Elem,
         y: <Sy>::Elem,
     ) -> Result<(), crate::InterpolateError> {
-        if !interpolator.is_in_x_range(x) {
+        if !self.extrapolate && !interpolator.is_in_x_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:?} is not in range"
             )));
         }
-        if !interpolator.is_in_y_range(y) {
+        if !self.extrapolate && !interpolator.is_in_y_range(y) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "y = {y:?} is not in range"
             )));
@@ -82,6 +84,11 @@ where
 
 impl Biliniar {
     pub fn new() -> Self {
-        Self
+        Biliniar { extrapolate: false }
+    }
+
+    pub fn extrapolate(mut self, yes: bool) -> Self {
+        self.extrapolate = yes;
+        self
     }
 }
