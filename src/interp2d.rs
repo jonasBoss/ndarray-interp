@@ -102,13 +102,23 @@ where
     Strat: Interp2DStrategy<Sd, Sx, Sy, D>,
 {
     /// Create a interpolator without any data validation. This is fast and cheap.
-    /// 
+    ///
     /// The following data properties are assumed, but not checked:
     /// `x` and `y` are stricktly monotonic rising and `data.shape()[0] == x.len()`, `data.shape()[1] == y.len()`
-    pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, y: ArrayBase<Sy, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
-        Interp2D { x, y, data, strategy }
+    pub fn new_unchecked(
+        x: ArrayBase<Sx, Ix1>,
+        y: ArrayBase<Sy, Ix1>,
+        data: ArrayBase<Sd, D>,
+        strategy: Strat,
+    ) -> Self {
+        Interp2D {
+            x,
+            y,
+            data,
+            strategy,
+        }
     }
-    
+
     /// Calculate the interpolated values at `(x, y)`.
     /// Returns the interpolated data in an array two dimensions smaller than
     /// the data dimension.
