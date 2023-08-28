@@ -1,11 +1,13 @@
 use ndarray::{ArrayBase, Data, Ix1};
+use std::fmt::Debug;
 
 /// Helper methods for one dimensional numeric arrays
 pub trait VectorExtensions<T> {
     /// get the monotonic property of the vector
     fn monotonic_prop(&self) -> Monotonic;
 
-    /// Get the index of the next lower value inside the vector
+    /// Get the index of the next lower value inside the vector.
+    /// This is not guaranteed to return the index of an exact match.
     ///
     /// This will never return the last index of the vector.
     /// when x is out of bounds it will either return `0` or `self.len() - 2`
@@ -33,7 +35,7 @@ use crate::interp1d::Linear;
 impl<S> VectorExtensions<S::Elem> for ArrayBase<S, Ix1>
 where
     S: Data,
-    S::Elem: PartialOrd + Num + NumCast + Copy,
+    S::Elem: Debug + PartialOrd + Num + NumCast + Copy,
 {
     fn monotonic_prop(&self) -> Monotonic {
         if self.len() <= 1 {
@@ -52,8 +54,8 @@ where
             .windows(2)
             .into_iter()
             .try_fold(Init, |state, items| {
-                let a = items.get(0).unwrap_or_else(|| unreachable!());
-                let b = items.get(1).unwrap_or_else(|| unreachable!());
+                let a = items[0];
+                let b = items[1];
                 match state {
                     Init => {
                         if a < b {
@@ -129,14 +131,12 @@ where
             );
 
             let mid = Linear::calc_frac(p1, p2, x);
-            let mut mid_idx: usize = cast(mid)
-                .unwrap_or_else(|| unimplemented!("mid is positive, so this should work always"));
-            if mid_idx == range.1 {
-                mid_idx -= 1;
-            };
-            let mut mid_x = self[mid_idx];
+            let mid_idx: usize =
+                cast(mid).unwrap_or_else(|| unimplemented!("failed to convert {mid:?} to usize"));
 
-            if mid_x <= x && x <= self[mid_idx + 1] {
+            let mid_x = self[mid_idx];
+
+            if mid_x <= x && x < self[mid_idx + 1] {
                 return mid_idx;
             }
             if mid_x < x {
@@ -147,8 +147,8 @@ where
 
             // the above alone has the potential to end in an infinte loop
             // do a binary search step to guarantee progress
-            mid_idx = (range.1 - range.0) / 2 + range.0;
-            mid_x = self[mid_idx];
+            let mid_idx = (range.1 - range.0) / 2 + range.0;
+            let mid_x = self[mid_idx];
             if mid_x == x {
                 return mid_idx;
             }
@@ -164,9 +164,75 @@ where
 
 #[cfg(test)]
 mod test {
-    use ndarray::{array, s, Array1};
+    use ndarray::{array, s, Array, Array1};
 
     use super::{Monotonic, VectorExtensions};
+
+    macro_rules! test_index {
+        ($i:expr, $q:expr) => {
+            let data = Array::linspace(0.0, 10.0, 11);
+            assert_eq!($i, data.get_lower_index($q));
+        };
+        ($i:expr, $q:expr, exp) => {
+            let data = Array::from_iter((0..11).map(|x| 2f64.powi(x)));
+            assert_eq!($i, data.get_lower_index($q));
+        };
+    }
+
+    #[test]
+    fn test_outside_left() {
+        test_index!(0, -1.0);
+    }
+
+    #[test]
+    fn test_outside_right() {
+        test_index!(9, 25.0);
+    }
+
+    #[test]
+    fn test_left_border() {
+        test_index!(0, 0.0);
+    }
+
+    #[test]
+    fn test_right_border() {
+        test_index!(9, 10.0);
+    }
+
+    #[test]
+    fn test_exact_index() {
+        for i in 0..10 {
+            test_index!(i, i as f64);
+        }
+    }
+
+    #[test]
+    fn test_pos_inf_index() {
+        test_index!(9, f64::INFINITY);
+    }
+
+    #[test]
+    fn test_neg_inf_index() {
+        test_index!(0, f64::NEG_INFINITY);
+    }
+
+    #[test]
+    #[should_panic(expected = "not implemented: failed to convert NaN to usize")]
+    fn test_nan() {
+        test_index!(0, f64::NAN);
+    }
+
+    #[test]
+    fn test_exponential_exact() {
+        for (i, q) in (0..10).map(|x| (x as usize, 2f64.powi(x))) {
+            test_index!(i, q, exp);
+        }
+    }
+
+    #[test]
+    fn test_exponential_right_border() {
+        test_index!(9, 1024.0, exp);
+    }
 
     macro_rules! test_monotonic {
         ($d:ident, $expected:pat) => {
