@@ -8,10 +8,11 @@ pub trait VectorExtensions<T> {
     /// Get the index of the next lower value inside the vector
     ///
     /// This will never return the last index of the vector.
-    /// when x is out of bounds it will either return index 0 or self.len() - 2
+    /// when x is out of bounds it will either return `0` or `self.len() - 2`
+    /// depending on which side it is out of bounds
     ///
     /// # Warning
-    /// this method requires the [`monotonic_prop`] to be
+    /// this method requires the [`monotonic_prop`](VectorExtensions::monotonic_prop) to be
     /// `Monotonic::Rising { strict: true }`
     /// otherwise the behaviour is undefined
     fn get_lower_index(&self, x: T) -> usize;

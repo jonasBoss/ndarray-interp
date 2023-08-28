@@ -1,3 +1,9 @@
+# 0.3.1
+ - added type aliases for common interpolators
+ - make the `VectorExtensions` trait public
+ - add `Interp1D::new_unchecked` and `Interp2D::new_unchecked` methods
+ - add biliniar extrapolation
+
 # 0.3.0
  - add 2d interpolation
  - add biliniar interpolation strategy
