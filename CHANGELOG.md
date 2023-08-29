@@ -3,6 +3,7 @@
  - make the `VectorExtensions` trait public
  - add `Interp1D::new_unchecked` and `Interp2D::new_unchecked` methods
  - add biliniar extrapolation
+ - impl `Default` for interpolation strategies
 
 # 0.3.0
  - add 2d interpolation
