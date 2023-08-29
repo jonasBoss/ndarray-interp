@@ -91,3 +91,9 @@ impl Linear {
         m * (x - x1) + b
     }
 }
+
+impl Default for Linear {
+    fn default() -> Self {
+        Self::new()
+    }
+}

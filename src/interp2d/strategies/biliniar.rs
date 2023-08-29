@@ -92,3 +92,9 @@ impl Biliniar {
         self
     }
 }
+
+impl Default for Biliniar {
+    fn default() -> Self {
+        Self::new()
+    }
+}

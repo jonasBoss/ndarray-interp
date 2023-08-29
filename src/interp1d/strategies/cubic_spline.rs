@@ -250,6 +250,12 @@ impl CubicSpline {
     }
 }
 
+impl Default for CubicSpline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct CubicSplineStrategy<Sd, D>
 where
