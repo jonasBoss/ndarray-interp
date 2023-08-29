@@ -11,7 +11,7 @@ A Interpolation crate for usage with the rust [ndarray](https://crates.io/crates
 ## Interpolation strategies
  - Linear interpolation with, and without extrapolation
  - Cubic spline interpolation [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation)
- - Biliniar interpolation [Wikipedia](https://en.wikipedia.org/wiki/Bilinear_interpolation)
+ - Biliniar interpolation with, and without extrapolation [Wikipedia](https://en.wikipedia.org/wiki/Bilinear_interpolation)
 
 ## Planned Features
  - More interpolation strategies
