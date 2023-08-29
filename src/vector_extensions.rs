@@ -42,63 +42,14 @@ where
             return NotMonotonic;
         };
 
-        #[derive(Debug)]
-        enum State {
-            Init,
-            NotStrict,
-            Known(Monotonic),
-        }
-        use State::*;
-
-        let state = self
-            .windows(2)
+        self.windows(2)
             .into_iter()
-            .try_fold(Init, |state, items| {
+            .try_fold(MonotonicState::start(), |state, items| {
                 let a = items[0];
                 let b = items[1];
-                match state {
-                    Init => {
-                        if a < b {
-                            return Ok(Known(Rising { strict: true }));
-                        } else if a == b {
-                            return Ok(NotStrict);
-                        }
-                        Ok(Known(Falling { strict: true }))
-                    }
-                    NotStrict => {
-                        if a < b {
-                            return Ok(Known(Rising { strict: false }));
-                        } else if a == b {
-                            return Ok(NotStrict);
-                        }
-                        Ok(Known(Falling { strict: false }))
-                    }
-                    Known(Rising { strict }) => {
-                        if a == b {
-                            return Ok(Known(Rising { strict: false }));
-                        } else if a < b {
-                            return Ok(Known(Rising { strict }));
-                        }
-                        Err(NotMonotonic)
-                    }
-                    Known(Falling { strict }) => {
-                        if a == b {
-                            return Ok(Known(Falling { strict: false }));
-                        } else if a > b {
-                            return Ok(Known(Falling { strict }));
-                        }
-                        Err(NotMonotonic)
-                    }
-                    Known(NotMonotonic) => unreachable!(),
-                }
+                state.update(a, b).short_circuit()
             })
-            .unwrap_or(Known(NotMonotonic));
-
-        if let Known(state) = state {
-            state
-        } else {
-            NotMonotonic
-        }
+            .map_or_else(|mon| mon, |state| state.finish())
     }
 
     fn get_lower_index(&self, x: S::Elem) -> usize {
@@ -159,6 +110,92 @@ where
             }
         }
         range.0
+    }
+}
+
+/// A State Machine for finding the monotonic property of an array
+#[derive(Debug)]
+enum MonotonicState {
+    Init,
+    NotStrict,
+    Likely(Monotonic),
+}
+
+impl MonotonicState {
+    /// start the state machine
+    fn start() -> Self {
+        Self::Init
+    }
+
+    /// update the state machine with two consecutive values from the vector
+    fn update<T>(self, a: T, b: T) -> Self
+    where
+        T: PartialOrd,
+    {
+        use MonotonicState::*;
+        match self {
+            Init => {
+                if a < b {
+                    Likely(Rising { strict: true })
+                } else if a == b {
+                    NotStrict
+                } else {
+                    Likely(Falling { strict: true })
+                }
+            }
+            NotStrict => {
+                if a < b {
+                    Likely(Rising { strict: false })
+                } else if a == b {
+                    NotStrict
+                } else {
+                    Likely(Falling { strict: false })
+                }
+            }
+            Likely(Rising { strict }) => {
+                if a == b {
+                    Likely(Rising { strict: false })
+                } else if a < b {
+                    Likely(Rising { strict })
+                } else {
+                    Likely(NotMonotonic)
+                }
+            }
+            Likely(Falling { strict }) => {
+                if a == b {
+                    Likely(Falling { strict: false })
+                } else if a > b {
+                    Likely(Falling { strict })
+                } else {
+                    Likely(NotMonotonic)
+                }
+            }
+            Likely(NotMonotonic) => Likely(NotMonotonic),
+        }
+    }
+
+    /// return `Err(Monotonic)` when the state machine can no longer change its state
+    /// otherwise retruns `Ok(self)`
+    ///
+    /// This can be used with the [`Iterator::try_fold()`] method short-circuiting
+    /// the iterator.
+    fn short_circuit(self) -> Result<Self, Monotonic> {
+        match self {
+            MonotonicState::Likely(NotMonotonic) => Err(NotMonotonic),
+            _ => Ok(self),
+        }
+    }
+
+    /// get the final value of the state machine
+    ///
+    /// # panics
+    /// when the state machine is still in the `Init` State
+    fn finish(self) -> Monotonic {
+        match self {
+            MonotonicState::Init => panic!("`MonotonicState::update` was never called"),
+            MonotonicState::NotStrict => NotMonotonic,
+            MonotonicState::Likely(mon) => mon,
+        }
     }
 }
 

@@ -99,11 +99,7 @@ where
     ///
     /// The following data properties are assumed, but not checked:
     /// `x` is stricktly monotonic rising and `data.shape()[0] == x.len()`
-    pub fn new_unchecked<'a>(
-        x: ArrayBase<Sx, Ix1>,
-        data: ArrayBase<Sd, D>,
-        strategy: Strat,
-    ) -> Self {
+    pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
         Interp1D { x, data, strategy }
     }
 
