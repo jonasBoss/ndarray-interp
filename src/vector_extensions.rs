@@ -214,6 +214,10 @@ mod test {
             let data = Array::from_iter((0..11).map(|x| 2f64.powi(x)));
             assert_eq!($i, data.get_lower_index($q));
         };
+        ($i:expr, $q:expr, ln) => {
+            let data = Array::from_iter((0..11).map(|x| (x as f64).ln_1p()));
+            assert_eq!($i, data.get_lower_index($q));
+        };
     }
 
     #[test]
@@ -244,6 +248,15 @@ mod test {
     }
 
     #[test]
+    fn test_index() {
+        for mut i in 0..100usize {
+            let q = i as f64 / 10.0;
+            i /= 10;
+            test_index!(i, q);
+        }
+    }
+
+    #[test]
     fn test_pos_inf_index() {
         test_index!(9, f64::INFINITY);
     }
@@ -260,8 +273,15 @@ mod test {
     }
 
     #[test]
-    fn test_exponential_exact() {
+    fn test_exponential_exact_index() {
         for (i, q) in (0..10).map(|x| (x as usize, 2f64.powi(x))) {
+            test_index!(i, q, exp);
+        }
+    }
+
+    #[test]
+    fn test_exponential_index() {
+        for (i, q) in (0..100usize).map(|x| (x / 10, 2f64.powf(x as f64 / 10.0))) {
             test_index!(i, q, exp);
         }
     }
@@ -269,6 +289,18 @@ mod test {
     #[test]
     fn test_exponential_right_border() {
         test_index!(9, 1024.0, exp);
+    }
+
+    #[test]
+    fn test_exponential_left_border() {
+        test_index!(0, 1.0, exp);
+    }
+
+    #[test]
+    fn test_log() {
+        for (i, q) in (0..100usize).map(|x| (x / 10, (x as f64 / 10.0).ln_1p())) {
+            test_index!(i, q, ln);
+        }
     }
 
     macro_rules! test_monotonic {
