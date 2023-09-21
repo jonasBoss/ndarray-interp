@@ -11,9 +11,15 @@ repository = "https://github.com/jonasBoss/ndarray-interp"
 [dependencies]
 ndarray = "0.15"
 num-traits = "0.2"
-thiserror = "1.0.40"
+thiserror = "1.0"
 
 [dev-dependencies]
-cargo-tarpaulin = "0.26.0"
+cargo-tarpaulin = "0.26"
 ndarray = {version = "0.15", features = ["approx-0_5"] }
-approx = "0.5.1" 
+approx = "0.5" 
+criterion = "0.5"
+rand = "0.8"
+
+[[bench]]
+name = "vector_extensions"
+harness = false
