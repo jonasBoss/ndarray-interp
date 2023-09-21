@@ -1,3 +1,8 @@
+# 0.3.2
+performance improvement for `VectorExtensions::get_lower_index`.
+From -24% for evenly spaced values up to 72% for randomised and 
+logarithimic spaced values.
+
 # 0.3.1
  - added type aliases for common interpolators
  - make the `VectorExtensions` trait public
