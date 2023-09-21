@@ -103,8 +103,11 @@ where
 {
     /// Create a interpolator without any data validation. This is fast and cheap.
     ///
+    /// # Safety
     /// The following data properties are assumed, but not checked:
-    /// `x` and `y` are stricktly monotonic rising and `data.shape()[0] == x.len()`, `data.shape()[1] == y.len()`
+    ///  - `x` and `y` are stricktly monotonic rising
+    ///  - `data.shape()[0] == x.len()`, `data.shape()[1] == y.len()`
+    ///  - the `strategy` is porperly initialized with the data
     pub fn new_unchecked(
         x: ArrayBase<Sx, Ix1>,
         y: ArrayBase<Sy, Ix1>,
