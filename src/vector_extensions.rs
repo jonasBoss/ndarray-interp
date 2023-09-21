@@ -67,43 +67,41 @@ where
 
         // We assume that the spacing is even. So we can calculate the index
         // and check it. This finishes in O(1) for even spaced axis.
-        // Otherwise we do a binary search with O(log n)
         let mut range = (0usize, self.len() - 1);
+        let p1 = (
+            self[range.0],
+            cast(range.0)
+                .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
+        );
+        let p2 = (
+            self[range.1],
+            cast(range.1)
+                .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
+        );
+
+        let mid = Linear::calc_frac(p1, p2, x);
+        let mid_idx: usize =
+            cast(mid).unwrap_or_else(|| unimplemented!("failed to convert {mid:?} to usize"));
+
+        let mid_x = self[mid_idx];
+
+        if mid_x <= x && x < self[mid_idx + 1] {
+            return mid_idx;
+        }
+        if mid_x <= x {
+            // why is this faster than `mid_x < x`???
+            range.0 = mid_idx;
+        } else {
+            range.1 = mid_idx;
+        }
+
+        // the spacing was apparently not even, do binary search
+        // O(log n)
         while range.0 + 1 < range.1 {
-            let p1 = (
-                self[range.0],
-                cast(range.0)
-                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
-            );
-            let p2 = (
-                self[range.1],
-                cast(range.1)
-                    .unwrap_or_else(|| unimplemented!("casting from usize should always work!")),
-            );
-
-            let mid = Linear::calc_frac(p1, p2, x);
-            let mid_idx: usize =
-                cast(mid).unwrap_or_else(|| unimplemented!("failed to convert {mid:?} to usize"));
-
-            let mid_x = self[mid_idx];
-
-            if mid_x <= x && x < self[mid_idx + 1] {
-                return mid_idx;
-            }
-            if mid_x < x {
-                range.0 = mid_idx;
-            } else {
-                range.1 = mid_idx;
-            }
-
-            // the above alone has the potential to end in an infinte loop
-            // do a binary search step to guarantee progress
             let mid_idx = (range.1 - range.0) / 2 + range.0;
             let mid_x = self[mid_idx];
-            if mid_x == x {
-                return mid_idx;
-            }
-            if mid_x < x {
+
+            if mid_x <= x {
                 range.0 = mid_idx;
             } else {
                 range.1 = mid_idx;
