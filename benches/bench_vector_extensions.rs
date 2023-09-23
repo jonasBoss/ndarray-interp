@@ -2,6 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ndarray::{Array, Array1};
 use ndarray_interp::vector_extensions::VectorExtensions;
 use rand::{distributions::Uniform, prelude::*};
+use rand_extensions::RandArray;
+
+mod rand_extensions;
 
 fn rng(seed: u64) -> StdRng {
     StdRng::seed_from_u64(seed)
@@ -14,14 +17,7 @@ fn run(arr: &Array1<f64>, query: &Array1<f64>) {
 }
 
 fn uniform_rng() -> Array1<f64> {
-    let mut arr = Vec::from_iter(
-        rng(42)
-            .sample_iter(Uniform::new_inclusive(0.0, 1.0))
-            .take(100),
-    );
-    arr.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    arr.dedup();
-    Array::from(arr)
+    Array::from_rand_ordered(100, (0.0, 1.0), 42)
 }
 
 fn bunched_linspace() -> Array1<f64> {
@@ -38,13 +34,9 @@ fn bunched_linspace() -> Array1<f64> {
 }
 
 fn noisy_linspace() -> Array1<f64> {
-    let mut arr = Array::linspace(0.0, 1.0, 100);
-    arr.iter_mut()
-        .zip(rng(42).sample_iter(Uniform::new(-0.002, 0.002)))
-        .for_each(|(val, noise)| {
-            *val += noise;
-        });
-    arr
+    let arr = Array::linspace(0.0, 1.0, 100);
+    let noise = Array::from_rand(100, (-0.002, 0.002), 42);
+    arr + noise
 }
 
 fn bench_get_lower_index(c: &mut Criterion) {
