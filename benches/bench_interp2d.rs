@@ -32,6 +32,15 @@ fn bench_interp2d_scalar(c: &mut Criterion) {
             });
         })
     });
+
+    let mut buffer = Array::zeros(1).remove_axis(Axis(0));
+    c.bench_function("2D scalar `interp_into`", |b| {
+        b.iter(|| {
+            query_x.iter().zip(query_y.iter()).for_each(|(&x, &y)| {
+                interp.interp_into(x, y, buffer.view_mut()).unwrap();
+            });
+        })
+    });
 }
 
 fn bench_interp2d_scalar_multithread(c: &mut Criterion) {
@@ -90,6 +99,15 @@ fn bench_interp2d_array(c: &mut Criterion) {
         })
     });
 
+    let mut buffer = Array::zeros(5);
+    c.bench_function("2D array `interp_into`", |b| {
+        b.iter(|| {
+            query_x.iter().zip(query_y.iter()).for_each(|(&x, &y)| {
+                interp.interp_into(x, y, buffer.view_mut()).unwrap();
+            });
+        })
+    });
+
     let query_x = query_x.into_shape((2500, 4)).unwrap();
     let query_y = query_y.into_shape((2500, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
@@ -98,6 +116,15 @@ fn bench_interp2d_array(c: &mut Criterion) {
         b.iter(|| {
             query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
                 interp.interp_array(x, y).unwrap();
+            });
+        })
+    });
+
+    let mut buffer = Array::zeros((4, 5));
+    c.bench_function("2D array `interp_array_into`", |b| {
+        b.iter(|| {
+            query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
+                interp.interp_array_into(x, y, buffer.view_mut()).unwrap();
             });
         })
     });
