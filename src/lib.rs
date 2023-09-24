@@ -13,6 +13,7 @@
 //! see the `custom_strategy.rs` example.
 //!
 
+use ndarray::ShapeError;
 use thiserror::Error;
 
 pub mod interp1d;
@@ -41,4 +42,6 @@ pub enum BuilderError {
 pub enum InterpolateError {
     #[error("{0}")]
     OutOfBounds(String),
+    #[error("{1}")]
+    ShapeError(ShapeError, String)
 }

@@ -57,9 +57,9 @@ where
     Sx: Data<Elem = Sd::Elem>,
     Strat: Interp1DStrategy<Sd, Sx, Ix1>,
 {
-    #[deprecated(since = "0.4.0", note = "use `Interp1D::interpolate` instead")]
+    #[deprecated(since = "0.4.0", note = "use `Interp1D::interp` instead")]
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
-        self.interpolate(x)
+        self.interp(x)
     }
 
     /// Calculate the interpolated values at `x`.
@@ -81,10 +81,10 @@ where
     /// let expected = array![0.25, 2.25, 3.75];
     ///
     /// let interpolator = Interp1DBuilder::new(data).build().unwrap();
-    /// let result = interpolator.interpolate(query).unwrap();
+    /// let result = interpolator.interp(query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
     /// ```
-    pub fn interpolate(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
+    pub fn interp(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
         let mut buffer = self
             .buffer
             .get_or(|| {
@@ -136,18 +136,19 @@ where
         }
     }
 
-    /// As this is generic for all Dimensions D, this will remain available.
-    /// _ndarray currently does not allow user implementaions of [`Dimension`]_
-    #[deprecated(since = "0.4.0", note = "use `Interp1D::interpolate` instead")]
-    pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
-        let dim = self.data.raw_dim().remove_axis(Axis(0));
-        let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
+    /// Calculate the interpolated values at `x`.
+    /// and stores the result into the provided buffer
+    /// 
+    /// This can improve performance compared to [`interp`](Interp1D::interp) 
+    /// because it does not allocate any memory for the result
+    #[inline]
+    pub fn interp_into(&self, x: Sx::Elem, buffer: ArrayViewMut<'_, Sd::Elem, D::Smaller>) -> Result<(), InterpolateError>{
         self.strategy
-            .interp_into(self, target.view_mut(), x)
-            .map(|_| target)
+            .interp_into(self, buffer, x)
     }
 
     /// Calculate the interpolated values at all points in `xs`
+    /// See [`interp_array_into`](Interp1D::interp_array_into) for dimension information
     ///
     /// ```rust
     /// # use ndarray_interp::*;
@@ -158,46 +159,6 @@ where
     /// let x =        array![0.0,  1.0, 2.0 ];
     /// let query =    array![0.5,  1.0, 1.5 ];
     /// let expected = array![0.25, 0.5, 0.75];
-    ///
-    /// let interpolator = Interp1DBuilder::new(data)
-    ///     .x(x)
-    ///     .strategy(Linear::new())
-    ///     .build().unwrap();
-    /// let result = interpolator.interp_array(&query).unwrap();
-    /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
-    /// ```
-    ///
-    /// # Dimensions
-    /// given the data dimension is `N` and the dimension of `xs` is `M`
-    /// the return array will have dimension `M + N - 1` where the first
-    /// `M` dimensions correspond to the dimensions of `xs`.
-    ///
-    /// ```rust
-    /// # use ndarray_interp::*;
-    /// # use ndarray_interp::interp1d::*;
-    /// # use ndarray::*;
-    /// # use approx::*;
-    /// // data has 2 dimension:
-    /// let data = array![
-    ///     [0.0, 2.0],
-    ///     [0.5, 2.5],
-    ///     [1.0, 3.0],
-    /// ];
-    /// let x = array![
-    ///     0.0,
-    ///     1.0,
-    ///     2.0,
-    /// ];
-    /// // query with 2 dimensions:
-    /// let query = array![
-    ///     [0.0, 0.5],
-    ///     [1.0, 1.5],
-    /// ];
-    /// // expecting 3 dimensions!
-    /// let expected = array![
-    ///     [[0.0, 2.0], [0.25, 2.25]], // result for x=[0.0, 0.5]
-    ///     [[0.5, 2.5], [0.75, 2.75]], // result for x=[1.0, 1.5]
-    /// ];
     ///
     /// let interpolator = Interp1DBuilder::new(data)
     ///     .x(x)
@@ -222,29 +183,107 @@ where
                 *new_axis = len;
             });
         let mut ys = Array::zeros(dim);
+        self.interp_array_into(xs, ys.view_mut()).map(|_| ys)
+    }
 
+    /// Calculate the interpolated values at all points in `xs` 
+    /// and stores the result into the provided buffer
+    /// 
+    /// This can improve performance compared to [`interp_array`](Interp1D::interp_array) 
+    /// because it does not allocate any memory for the result
+    /// 
+    /// # Dimensions
+    /// given the data dimension is `N` and the dimension of `xs` is `M`
+    /// the buffer must have dimension `M + N - 1` where the first
+    /// `M` dimensions correspond to the dimensions of `xs`.
+    ///
+    /// Lets assume we hava a data dimension of `N = (2, 3, 4)` and query this data
+    /// with an array of dimension `M = (10)`, the return dimension will be `(10, 3, 4)`
+    /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 3, 4)`
+    /// 
+    /// ```rust
+    /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
+    /// # use ndarray::*;
+    /// # use approx::*;
+    /// // data has 2 dimension:
+    /// let data = array![
+    ///     [0.0, 2.0],
+    ///     [0.5, 2.5],
+    ///     [1.0, 3.0],
+    /// ];
+    /// let x = array![
+    ///     0.0,
+    ///     1.0,
+    ///     2.0,
+    /// ];
+    /// // query with 2 dimensions:
+    /// let query = array![
+    ///     [0.0, 0.5],
+    ///     [1.0, 1.5],
+    /// ];
+    /// 
+    /// // we need 3 buffer dimensions
+    /// let mut buffer = array![
+    ///     [[0.0, 0.0], [0.0, 0.0]],
+    ///     [[0.0, 0.0], [0.0, 0.0]],
+    /// ];
+    /// 
+    /// // what we expect in the buffer after interpolation
+    /// let expected = array![
+    ///     [[0.0, 2.0], [0.25, 2.25]], // result for x=[0.0, 0.5]
+    ///     [[0.5, 2.5], [0.75, 2.75]], // result for x=[1.0, 1.5]
+    /// ];
+    ///
+    /// let interpolator = Interp1DBuilder::new(data)
+    ///     .x(x)
+    ///     .strategy(Linear::new())
+    ///     .build().unwrap();
+    /// interpolator.interp_array_into(&query, buffer.view_mut()).unwrap();
+    /// # assert_abs_diff_eq!(buffer, expected, epsilon=f64::EPSILON);
+    /// ```
+    #[inline]
+    pub fn interp_array_into<Sq, Dq>(
+        &self,
+        xs: &ArrayBase<Sq, Dq>,
+        mut buffer: ArrayViewMut<'_, Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>,
+    ) -> Result<(), InterpolateError>
+    where
+        Sq: Data<Elem = Sd::Elem>,
+        Dq: Dimension + DimAdd<D::Smaller>,
+    {
         // Perform interpolation for each index
         for (index, &x) in xs.indexed_iter() {
             let current_dim = index.clone().into_dimension();
             let subview =
-                ys.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| match current_dim
-                    .as_array_view()
-                    .get(nr)
-                {
-                    Some(idx) => Slice::from(*idx..*idx + 1),
-                    None => Slice::from(..),
+                buffer.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| {
+                    match current_dim.as_array_view().get(nr) {
+                        Some(idx) => Slice::from(*idx..*idx + 1),
+                        None => Slice::from(..),
+                    }
                 });
 
             self.strategy.interp_into(
                 self,
                 subview
                     .into_shape(self.data.raw_dim().remove_axis(Axis(0)))
-                    .unwrap_or_else(|_| unreachable!()),
+                    .map_err(|err| {
+                        let mut expect_dim = <Dq as DimAdd<D::Smaller>>::Output::default();
+                        expect_dim.as_array_view_mut()
+                            .into_iter()
+                            .zip(xs.shape().iter().chain(self.data.shape()[1..].iter()))
+                            .for_each(|(new_axis, &len)| {
+                                *new_axis = len;
+                            });
+                        let expect_dim = expect_dim.into_pattern();
+                        let got_dim = xs.dim();
+                        let string = format!("Expected {expect_dim:?}, got {got_dim:?}");
+                        InterpolateError::ShapeError(err, string)
+                    })?,
                 x,
             )?;
         }
-
-        Ok(ys)
+        Ok(())
     }
 
     /// get `(x, data)` coordinate at given index
@@ -281,8 +320,8 @@ macro_rules! impl_interp_for_dim {
             /// Calculate the interpolated values at `x`.
             /// Returns the interpolated data in an array one dimension smaller than
             /// the data dimension.
-            /// [`interpolate`](Interp1D::interpolate)
-            pub fn interpolate(
+            /// [`interp`](Interp1D::interp)
+            pub fn interp(
                 &self,
                 x: Sx::Elem,
             ) -> Result<Array<Sd::Elem, <$dim as Dimension>::Smaller>, InterpolateError> {
@@ -447,7 +486,7 @@ mod tests {
                 let res = Interp1D::builder(arr)
                     .build()
                     .unwrap()
-                    .interpolate(2.2)
+                    .interp(2.2)
                     .unwrap();
                 assert_eq!(res.ndim(), $dim - 1);
             }
@@ -460,7 +499,7 @@ mod tests {
         let _: f64 = Interp1D::builder(arr)
             .build()
             .unwrap()
-            .interpolate(2.2)
+            .interp(2.2)
             .unwrap(); // type check the return as f64
     }
     test_dim!(interp1d_2d, 2, (4, 4));
