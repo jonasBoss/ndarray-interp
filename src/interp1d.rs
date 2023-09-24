@@ -50,6 +50,18 @@ where
     buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>>,
 }
 
+impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Send,
+    D: Dimension + RemoveAxis,
+{
+    /// Get the [Interp1DBuilder]
+    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear> {
+        Interp1DBuilder::new(data)
+    }
+}
+
 impl<Sd, Sx, Strat> Interp1D<Sd, Sx, Ix1, Strat>
 where
     Sd: Data,
@@ -99,18 +111,6 @@ where
     }
 }
 
-impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
-where
-    Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Send,
-    D: Dimension + RemoveAxis,
-{
-    /// Get the [Interp1DBuilder]
-    pub fn builder(data: ArrayBase<Sd, D>) -> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear> {
-        Interp1DBuilder::new(data)
-    }
-}
-
 impl<Sd, Sx, D, Strat> Interp1D<Sd, Sx, D, Strat>
 where
     Sd: Data,
@@ -119,23 +119,6 @@ where
     D: Dimension + RemoveAxis,
     Strat: Interp1DStrategy<Sd, Sx, D>,
 {
-    /// Create a interpolator without any data validation. This is fast and cheap.
-    ///
-    /// # Safety
-    /// The following data properties are assumed, but not checked:
-    ///  - `x` is stricktly monotonic rising
-    ///  - `data.shape()[0] == x.len()`
-    ///  - the `strategy` is porperly initialized with the data
-    pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
-        let buffer = ThreadLocal::new();
-        Interp1D {
-            x,
-            data,
-            strategy,
-            buffer,
-        }
-    }
-
     /// Calculate the interpolated values at `x`.
     /// and stores the result into the provided buffer
     ///
@@ -288,6 +271,23 @@ where
             )?;
         }
         Ok(())
+    }
+
+    /// Create a interpolator without any data validation. This is fast and cheap.
+    ///
+    /// # Safety
+    /// The following data properties are assumed, but not checked:
+    ///  - `x` is stricktly monotonic rising
+    ///  - `data.shape()[0] == x.len()`
+    ///  - the `strategy` is porperly initialized with the data
+    pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
+        let buffer = ThreadLocal::new();
+        Interp1D {
+            x,
+            data,
+            strategy,
+            buffer,
+        }
     }
 
     /// get `(x, data)` coordinate at given index
