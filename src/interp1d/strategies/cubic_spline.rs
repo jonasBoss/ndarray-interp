@@ -61,7 +61,8 @@ where
         + NumCast
         + Add
         + Pow<Sd::Elem, Output = Sd::Elem>
-        + ScalarOperand,
+        + ScalarOperand
+        + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
@@ -269,7 +270,7 @@ where
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {

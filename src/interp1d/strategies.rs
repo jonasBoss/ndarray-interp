@@ -15,7 +15,7 @@ pub use linear::Linear;
 pub trait Interp1DStrategyBuilder<Sd, Sx, D>
 where
     Sd: Data,
-    Sd::Elem: Num + Debug,
+    Sd::Elem: Num + Debug + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
     Self: Sized,
@@ -45,7 +45,7 @@ where
 pub trait Interp1DStrategy<Sd, Sx, D>
 where
     Sd: Data,
-    Sd::Elem: Num + Debug,
+    Sd::Elem: Num + Debug + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
     Self: Sized,

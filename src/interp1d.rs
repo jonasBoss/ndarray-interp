@@ -12,13 +12,14 @@
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy
 
-use std::{fmt::Debug, ops::Sub};
+use std::{cell::RefCell, fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension, IntoDimension,
     Ix1, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
+use thread_local::ThreadLocal;
 
 use crate::{
     vector_extensions::{Monotonic, VectorExtensions},
@@ -35,7 +36,7 @@ pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Lin
 pub struct Interp1D<Sd, Sx, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + Debug,
+    Sd::Elem: Num + Debug + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension,
     Strat: Interp1DStrategy<Sd, Sx, D>,
@@ -44,12 +45,15 @@ where
     x: ArrayBase<Sx, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
+
+    /// a thread local buffer, used by interp_scalar to avoid heap allocations
+    buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>>,
 }
 
 impl<Sd, Sx, Strat> Interp1D<Sd, Sx, Ix1, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Strat: Interp1DStrategy<Sd, Sx, Ix1>,
 {
@@ -71,14 +75,25 @@ where
     /// # assert_eq!(result, expected);
     /// ```
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
-        Ok(*self.interp(x)?.first().unwrap_or_else(|| unreachable!()))
+        let mut buffer = self
+            .buffer
+            .get_or(|| {
+                let dim = self.data.raw_dim().remove_axis(Axis(0));
+                RefCell::new(Array::zeros(dim))
+            })
+            .borrow_mut();
+        let mut target = buffer.view_mut();
+        self.strategy
+            .interp_into(self, target.view_mut(), x)
+            .map(|_| target.first().unwrap_or_else(|| unreachable!()))
+            .copied()
     }
 }
 
 impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Send,
     D: Dimension + RemoveAxis,
 {
     /// Get the [Interp1DBuilder]
@@ -90,7 +105,7 @@ where
 impl<Sd, Sx, D, Strat> Interp1D<Sd, Sx, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
     Strat: Interp1DStrategy<Sd, Sx, D>,
@@ -103,7 +118,13 @@ where
     ///  - `data.shape()[0] == x.len()`
     ///  - the `strategy` is porperly initialized with the data
     pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
-        Interp1D { x, data, strategy }
+        let buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>> = ThreadLocal::new();
+        Interp1D {
+            x,
+            data,
+            strategy,
+            buffer,
+        }
     }
 
     /// Calculate the interpolated values at `x`.
@@ -307,9 +328,9 @@ where
 impl<Sd, Sx, D, Strat> Interp1DBuilder<Sd, Sx, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Send,
     Sx: Data<Elem = Sd::Elem>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
     Strat: Interp1DStrategyBuilder<Sd, Sx, D>,
 {
     /// Add an custom x axis for the data. The axis needs to have the same lenght
@@ -365,6 +386,13 @@ where
         }
 
         let strategy = strategy.build(&x, &data)?;
-        Ok(Interp1D { x, data, strategy })
+
+        let buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>> = ThreadLocal::new();
+        Ok(Interp1D {
+            x,
+            data,
+            strategy,
+            buffer,
+        })
     }
 }
