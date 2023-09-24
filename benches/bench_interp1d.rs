@@ -27,6 +27,15 @@ fn bench_interp1d_scalar(c: &mut Criterion) {
             interp.interp_array(&query).unwrap();
         })
     });
+
+    let mut buffer = Array::zeros(1).remove_axis(Axis(0));
+    c.bench_function("1D scalar `interp_into`", |b| {
+        b.iter(|| {
+            for &x in &query {
+                interp.interp_into(x, buffer.view_mut()).unwrap();
+            }
+        })
+    });
 }
 
 fn bench_interp1d_scalar_multithread(c: &mut Criterion) {
@@ -68,12 +77,30 @@ fn bench_interp1d_array(c: &mut Criterion) {
         })
     });
 
+    let mut buffer = Array::zeros(5);
+    c.bench_function("1D array `interp_into`", |b| {
+        b.iter(|| {
+            for &x in &query {
+                interp.interp_into(x, buffer.view_mut()).unwrap();
+            }
+        })
+    });
+
     let query = query.into_shape((2500, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D array `interp_array`", |b| {
         b.iter(|| {
             for x in &query_arr {
                 interp.interp_array(x).unwrap();
+            }
+        })
+    });
+
+    let mut buffer = Array::zeros((4, 5));
+    c.bench_function("1D array `interp_array_into`", |b| {
+        b.iter(|| {
+            for x in &query_arr {
+                interp.interp_array_into(x, buffer.view_mut()).unwrap();
             }
         })
     });

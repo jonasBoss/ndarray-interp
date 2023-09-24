@@ -71,8 +71,8 @@ fn extrapolate() {
         .strategy(CubicSpline::new())
         .build()
         .unwrap();
-    let err = interp.interp_scalar(-0.5);
+    let err = interp.interp(-0.5);
     assert!(matches!(err, Err(InterpolateError::OutOfBounds(_))));
-    let err = interp.interp_scalar(3.5);
+    let err = interp.interp(3.5);
     assert!(matches!(err, Err(InterpolateError::OutOfBounds(_))));
 }
