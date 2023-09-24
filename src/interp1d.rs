@@ -82,10 +82,9 @@ where
                 RefCell::new(Array::zeros(dim))
             })
             .borrow_mut();
-        let mut target = buffer.view_mut();
         self.strategy
-            .interp_into(self, target.view_mut(), x)
-            .map(|_| target.first().unwrap_or_else(|| unreachable!()))
+            .interp_into(self, buffer.view_mut(), x)
+            .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
             .copied()
     }
 }
@@ -118,7 +117,7 @@ where
     ///  - `data.shape()[0] == x.len()`
     ///  - the `strategy` is porperly initialized with the data
     pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
-        let buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>> = ThreadLocal::new();
+        let buffer = ThreadLocal::new();
         Interp1D {
             x,
             data,
@@ -387,7 +386,7 @@ where
 
         let strategy = strategy.build(&x, &data)?;
 
-        let buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>> = ThreadLocal::new();
+        let buffer = ThreadLocal::new();
         Ok(Interp1D {
             x,
             data,
