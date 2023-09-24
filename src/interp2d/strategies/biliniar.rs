@@ -15,7 +15,7 @@ pub struct Biliniar {
 impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Biliniar
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
@@ -38,7 +38,7 @@ where
 impl<Sd, Sx, Sy, D> Interp2DStrategy<Sd, Sx, Sy, D> for Biliniar
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
