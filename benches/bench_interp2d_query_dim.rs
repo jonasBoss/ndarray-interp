@@ -30,6 +30,15 @@ fn bench_scalar_data_1d_query(c: &mut Criterion) {
             });
         })
     });
+
+    let mut buffer = Array::zeros(4);
+    c.bench_function("2D scalar `interp_array_into`", |b| {
+        b.iter(|| {
+            query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
+                interp.interp_array_into(x, y, buffer.view_mut()).unwrap();
+            });
+        })
+    });
 }
 
 fn bench_scalar_data_2d_query(c: &mut Criterion) {
@@ -46,6 +55,15 @@ fn bench_scalar_data_2d_query(c: &mut Criterion) {
             });
         })
     });
+
+    let mut buffer = Array::zeros((4, 4));
+    c.bench_function("2D scalar `interp_array_into` 2D-query", |b| {
+        b.iter(|| {
+            query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
+                interp.interp_array_into(x, y, buffer.view_mut()).unwrap();
+            });
+        })
+    });
 }
 
 fn bench_scalar_data_3d_query(c: &mut Criterion) {
@@ -59,6 +77,15 @@ fn bench_scalar_data_3d_query(c: &mut Criterion) {
         b.iter(|| {
             query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
                 interp.interp_array(x, y).unwrap();
+            });
+        })
+    });
+
+    let mut buffer = Array::zeros((5, 4, 4));
+    c.bench_function("2D scalar `interp_array_into` 3D-query", |b| {
+        b.iter(|| {
+            query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
+                interp.interp_array_into(x, y, buffer.view_mut()).unwrap();
             });
         })
     });
