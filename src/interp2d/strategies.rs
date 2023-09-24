@@ -14,7 +14,7 @@ pub use biliniar::Biliniar;
 pub trait Interp2DStrategyBuilder<Sd, Sx, Sy, D>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
@@ -46,7 +46,7 @@ where
 pub trait Interp2DStrategy<Sd, Sx, Sy, D>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,

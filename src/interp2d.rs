@@ -11,13 +11,14 @@
 //! # Strategies
 //!  - [`Biliniar`] Linear interpolation strategy
 
-use std::{fmt::Debug, ops::Sub};
+use std::{cell::RefCell, fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, Array1, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension,
     IntoDimension, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
+use thread_local::ThreadLocal;
 
 use crate::{
     vector_extensions::{Monotonic, VectorExtensions},
@@ -34,7 +35,7 @@ pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
 pub struct Interp2D<Sd, Sx, Sy, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension,
@@ -43,12 +44,15 @@ where
     y: ArrayBase<Sy, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
+
+    /// a thread local buffer, used by interp_scalar to avoid heap allocations
+    buffer: ThreadLocal<RefCell<Array<Sd::Elem, <D::Smaller as Dimension>::Smaller>>>,
 }
 
 impl<Sd, D> Interp2D<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     D: Dimension,
 {
     /// Get the [Interp2DBuilder]
@@ -62,7 +66,7 @@ where
 impl<Sd, Sx, Sy, Strat> Interp2D<Sd, Sx, Sy, Ix2, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     Strat: Interp2DStrategy<Sd, Sx, Sy, Ix2>,
@@ -87,14 +91,28 @@ where
     /// # assert_eq!(result, expected);
     /// ```
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
-        Ok(*self.interp(x, y)?.first().unwrap_or_else(|| unreachable!()))
+        let mut buffer = self
+            .buffer
+            .get_or(|| {
+                let dim = self
+                    .data
+                    .raw_dim()
+                    .remove_axis(Axis(0))
+                    .remove_axis(Axis(0));
+                RefCell::new(Array::zeros(dim))
+            })
+            .borrow_mut();
+        self.strategy
+            .interp_into(self, buffer.view_mut(), x, y)
+            .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
+            .copied()
     }
 }
 
 impl<Sd, Sx, Sy, D, Strat> Interp2D<Sd, Sx, Sy, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
@@ -114,11 +132,13 @@ where
         data: ArrayBase<Sd, D>,
         strategy: Strat,
     ) -> Self {
+        let buffer = ThreadLocal::new();
         Interp2D {
             x,
             y,
             data,
             strategy,
+            buffer,
         }
     }
 
@@ -311,7 +331,7 @@ where
 impl<Sd, Sx, Sy, D, Strat> Interp2DBuilder<Sd, Sx, Sy, D, Strat>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
@@ -414,11 +434,13 @@ where
         }
 
         let strategy = stratgy_builder.build(&x, &y, &data)?;
+        let buffer = ThreadLocal::new();
         Ok(Interp2D {
             x,
             y,
             data,
             strategy,
+            buffer,
         })
     }
 }
