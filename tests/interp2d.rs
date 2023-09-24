@@ -27,10 +27,10 @@ fn data_f64() -> Array2<f64> {
 fn cornerns_only_data_no_axis() {
     let data = data_i32();
     let interp = Interp2D::builder(data).build().unwrap();
-    assert_eq!(interp.interp_scalar(0, 0).unwrap(), 1);
-    assert_eq!(interp.interp_scalar(2, 3).unwrap(), 12);
-    assert_eq!(interp.interp_scalar(2, 0).unwrap(), 9);
-    assert_eq!(interp.interp_scalar(0, 3).unwrap(), 4);
+    assert_eq!(interp.interp(0, 0).unwrap(), 1);
+    assert_eq!(interp.interp(2, 3).unwrap(), 12);
+    assert_eq!(interp.interp(2, 0).unwrap(), 9);
+    assert_eq!(interp.interp(0, 3).unwrap(), 4);
 }
 
 #[test]
@@ -40,10 +40,10 @@ fn cornerns_only_x_axis() {
         .x(array![1, 2, 3])
         .build()
         .unwrap();
-    assert_eq!(interp.interp_scalar(1, 0).unwrap(), 1);
-    assert_eq!(interp.interp_scalar(3, 3).unwrap(), 12);
-    assert_eq!(interp.interp_scalar(3, 0).unwrap(), 9);
-    assert_eq!(interp.interp_scalar(1, 3).unwrap(), 4);
+    assert_eq!(interp.interp(1, 0).unwrap(), 1);
+    assert_eq!(interp.interp(3, 3).unwrap(), 12);
+    assert_eq!(interp.interp(3, 0).unwrap(), 9);
+    assert_eq!(interp.interp(1, 3).unwrap(), 4);
 }
 
 #[test]
@@ -53,10 +53,10 @@ fn cornerns_only_y_axis() {
         .y(array![-3.0, -2.0, -1.0, 0.0])
         .build()
         .unwrap();
-    assert_eq!(interp.interp_scalar(0.0, -3.0).unwrap(), 1.0);
-    assert_eq!(interp.interp_scalar(2.0, 0.0).unwrap(), 12.0);
-    assert_eq!(interp.interp_scalar(2.0, -3.0).unwrap(), 9.0);
-    assert_eq!(interp.interp_scalar(0.0, 0.0).unwrap(), 4.0);
+    assert_eq!(interp.interp(0.0, -3.0).unwrap(), 1.0);
+    assert_eq!(interp.interp(2.0, 0.0).unwrap(), 12.0);
+    assert_eq!(interp.interp(2.0, -3.0).unwrap(), 9.0);
+    assert_eq!(interp.interp(0.0, 0.0).unwrap(), 4.0);
 }
 
 #[test]
@@ -64,19 +64,19 @@ fn extrapolate() {
     let data = data_i32();
     let interp = Interp2D::builder(data).build().unwrap();
     assert!(matches!(
-        interp.interp_scalar(-1, 1),
+        interp.interp(-1, 1),
         Err(InterpolateError::OutOfBounds(_))
     ));
     assert!(matches!(
-        interp.interp_scalar(1, -1),
+        interp.interp(1, -1),
         Err(InterpolateError::OutOfBounds(_))
     ));
     assert!(matches!(
-        interp.interp_scalar(3, 1),
+        interp.interp(3, 1),
         Err(InterpolateError::OutOfBounds(_))
     ));
     assert!(matches!(
-        interp.interp_scalar(1, 4),
+        interp.interp(1, 4),
         Err(InterpolateError::OutOfBounds(_))
     ));
 }
