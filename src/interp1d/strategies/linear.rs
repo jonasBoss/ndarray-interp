@@ -16,7 +16,7 @@ pub struct Linear {
 impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for Linear
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
@@ -37,7 +37,7 @@ where
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for Linear
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
