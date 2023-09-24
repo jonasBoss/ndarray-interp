@@ -542,7 +542,11 @@ mod tests {
                 let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
                     .into_shape($shape)
                     .unwrap();
-                let res = Interp2D::builder(arr).build().unwrap().interp(2.2, 2.2).unwrap();
+                let res = Interp2D::builder(arr)
+                    .build()
+                    .unwrap()
+                    .interp(2.2, 2.2)
+                    .unwrap();
                 assert_eq!(res.ndim(), $dim - 2);
             }
         };
@@ -550,10 +554,12 @@ mod tests {
 
     #[test]
     fn interp2d_2d() {
-        let arr = rand_arr(16, (0.0, 1.0), 64)                    
-            .into_shape((4,4))
+        let arr = rand_arr(16, (0.0, 1.0), 64).into_shape((4, 4)).unwrap();
+        let _: f64 = Interp2D::builder(arr)
+            .build()
+            .unwrap()
+            .interp(2.2, 2.2)
             .unwrap();
-        let _: f64 = Interp2D::builder(arr).build().unwrap().interp(2.2, 2.2).unwrap();
         // type check the return as f64
     }
     test_dim!(interp2d_3d, 3, (4, 4, 4));
