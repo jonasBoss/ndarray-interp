@@ -138,13 +138,16 @@ where
 
     /// Calculate the interpolated values at `x`.
     /// and stores the result into the provided buffer
-    /// 
-    /// This can improve performance compared to [`interp`](Interp1D::interp) 
+    ///
+    /// This can improve performance compared to [`interp`](Interp1D::interp)
     /// because it does not allocate any memory for the result
     #[inline]
-    pub fn interp_into(&self, x: Sx::Elem, buffer: ArrayViewMut<'_, Sd::Elem, D::Smaller>) -> Result<(), InterpolateError>{
-        self.strategy
-            .interp_into(self, buffer, x)
+    pub fn interp_into(
+        &self,
+        x: Sx::Elem,
+        buffer: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
+    ) -> Result<(), InterpolateError> {
+        self.strategy.interp_into(self, buffer, x)
     }
 
     /// Calculate the interpolated values at all points in `xs`
@@ -186,12 +189,12 @@ where
         self.interp_array_into(xs, ys.view_mut()).map(|_| ys)
     }
 
-    /// Calculate the interpolated values at all points in `xs` 
+    /// Calculate the interpolated values at all points in `xs`
     /// and stores the result into the provided buffer
-    /// 
-    /// This can improve performance compared to [`interp_array`](Interp1D::interp_array) 
+    ///
+    /// This can improve performance compared to [`interp_array`](Interp1D::interp_array)
     /// because it does not allocate any memory for the result
-    /// 
+    ///
     /// # Dimensions
     /// given the data dimension is `N` and the dimension of `xs` is `M`
     /// the buffer must have dimension `M + N - 1` where the first
@@ -200,7 +203,7 @@ where
     /// Lets assume we hava a data dimension of `N = (2, 3, 4)` and query this data
     /// with an array of dimension `M = (10)`, the return dimension will be `(10, 3, 4)`
     /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 3, 4)`
-    /// 
+    ///
     /// ```rust
     /// # use ndarray_interp::*;
     /// # use ndarray_interp::interp1d::*;
@@ -222,13 +225,13 @@ where
     ///     [0.0, 0.5],
     ///     [1.0, 1.5],
     /// ];
-    /// 
+    ///
     /// // we need 3 buffer dimensions
     /// let mut buffer = array![
     ///     [[0.0, 0.0], [0.0, 0.0]],
     ///     [[0.0, 0.0], [0.0, 0.0]],
     /// ];
-    /// 
+    ///
     /// // what we expect in the buffer after interpolation
     /// let expected = array![
     ///     [[0.0, 2.0], [0.25, 2.25]], // result for x=[0.0, 0.5]
@@ -269,7 +272,8 @@ where
                     .into_shape(self.data.raw_dim().remove_axis(Axis(0)))
                     .map_err(|err| {
                         let mut expect_dim = <Dq as DimAdd<D::Smaller>>::Output::default();
-                        expect_dim.as_array_view_mut()
+                        expect_dim
+                            .as_array_view_mut()
                             .into_iter()
                             .zip(xs.shape().iter().chain(self.data.shape()[1..].iter()))
                             .for_each(|(new_axis, &len)| {
@@ -483,11 +487,7 @@ mod tests {
                 let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
                     .into_shape($shape)
                     .unwrap();
-                let res = Interp1D::builder(arr)
-                    .build()
-                    .unwrap()
-                    .interp(2.2)
-                    .unwrap();
+                let res = Interp1D::builder(arr).build().unwrap().interp(2.2).unwrap();
                 assert_eq!(res.ndim(), $dim - 1);
             }
         };
@@ -496,11 +496,8 @@ mod tests {
     #[test]
     fn interp1d_1d() {
         let arr = rand_arr(4, (0.0, 1.0), 64);
-        let _: f64 = Interp1D::builder(arr)
-            .build()
-            .unwrap()
-            .interp(2.2)
-            .unwrap(); // type check the return as f64
+        let _: f64 = Interp1D::builder(arr).build().unwrap().interp(2.2).unwrap();
+        // type check the return as f64
     }
     test_dim!(interp1d_2d, 2, (4, 4));
     test_dim!(interp1d_3d, 3, (4, 4, 4));

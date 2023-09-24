@@ -43,5 +43,5 @@ pub enum InterpolateError {
     #[error("{0}")]
     OutOfBounds(String),
     #[error("{1}")]
-    ShapeError(ShapeError, String)
+    ShapeError(ShapeError, String),
 }
