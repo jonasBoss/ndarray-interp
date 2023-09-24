@@ -14,8 +14,8 @@
 use std::{cell::RefCell, fmt::Debug, ops::Sub};
 
 use ndarray::{
-    Array, Array1, ArrayBase, ArrayView, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice,
+    Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd,
+    Dimension, IntoDimension, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
 use thread_local::ThreadLocal;
@@ -71,26 +71,16 @@ where
     Sy: Data<Elem = Sd::Elem>,
     Strat: Interp2DStrategy<Sd, Sx, Sy, Ix2>,
 {
-    /// convinient interpolation function for interpolation at one point
-    /// when the data dimension is [`type@Ix2`]
-    ///
-    /// ```rust
-    /// # use ndarray_interp::*;
-    /// # use ndarray_interp::interp2d::*;
-    /// # use ndarray::*;
-    /// # use approx::*;
-    /// let data = array![
-    ///     [1.0, 2.0],
-    ///     [3.0, 4.0],
-    /// ];
-    /// let (qx, qy) = (0.0, 0.5);
-    /// let expected = 1.5;
-    ///
-    /// let interpolator = Interp2D::builder(data).build().unwrap();
-    /// let result = interpolator.interp_scalar(qx, qy).unwrap();
-    /// # assert_eq!(result, expected);
-    /// ```
+    #[deprecated(since = "0.4.0", note = "use `Interp2D::interp` instead")]
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
+        self.interp(x, y)
+    }
+
+    /// Calculate the interpolated values at `(x, y)`.
+    /// Returns the interpolated data in an array two dimensions smaller than
+    /// the data dimension.
+    /// When the data dimension is [`type@Ix2`] it returns [`Sd::Elem`](ndarray::RawData::Elem)
+    pub fn interp(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
         let mut buffer = self
             .buffer
             .get_or(|| {
@@ -119,6 +109,137 @@ where
     D::Smaller: RemoveAxis,
     Strat: Interp2DStrategy<Sd, Sx, Sy, D>,
 {
+    /// Calculate the interpolated values at `(x, y)`.
+    /// and stores the result into the provided buffer
+    ///
+    /// This can improve performance compared to [`interp`](Interp2D::interp)
+    /// because it does not allocate any memory for the result
+    #[inline]
+    pub fn interp_into(
+        &self,
+        x: Sx::Elem,
+        y: Sy::Elem,
+        buffer: ArrayViewMut<'_, Sd::Elem, <D::Smaller as Dimension>::Smaller>,
+    ) -> Result<(), InterpolateError> {
+        self.strategy.interp_into(self, buffer, x, y)
+    }
+
+    /// Calculate the interpolated values at all points in `(xs, ys)`
+    ///
+    /// See [`interp_array_into`](Interp2D::interp_array_into) for dimension information
+    ///
+    /// # panics
+    /// when `xs.shape() != ys.shape()`
+    pub fn interp_array<Sqx, Sqy, Dq>(
+        &self,
+        xs: &ArrayBase<Sqx, Dq>,
+        ys: &ArrayBase<Sqy, Dq>,
+    ) -> Result<
+        Array<Sd::Elem, <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>,
+        InterpolateError,
+    >
+    where
+        Sqx: Data<Elem = Sd::Elem>,
+        Sqy: Data<Elem = Sy::Elem>,
+        Dq: Dimension,
+        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
+    {
+        assert!(
+            xs.shape() == ys.shape(),
+            "`xs.shape()` and `ys.shape()` do not match"
+        );
+        let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
+        dim.as_array_view_mut()
+            .into_iter()
+            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
+            .for_each(|(new_axis, &len)| {
+                *new_axis = len;
+            });
+        let mut zs = Array::zeros(dim);
+        self.interp_array_into(xs, ys, zs.view_mut()).map(|_| zs)
+    }
+
+    /// Calculate the interpolated values at all points in `(xs, ys)`
+    /// and stores the result into the provided buffer
+    ///
+    /// This can improve performance compared to [`interp_array`](Interp2D::interp_array)
+    /// because it does not allocate any memory for the result
+    ///
+    /// # Dimensions
+    /// given the data dimension `N` and the query dimension `M` the return array
+    /// will have the dimension `M + N - 2` where the fist `M` dimensions correspond
+    /// to the query dimenions of `xs` and `ys`
+    ///
+    /// Lets assume we hava a data dimension of `N = (2, 3, 4, 5)` and query this data
+    /// with an array of dimension `M = (10)`, the return dimension will be `(10, 4, 5)`
+    /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
+    ///
+    /// # panics
+    /// when `xs.shape() != ys.shape()`
+    pub fn interp_array_into<Sqx, Sqy, Dq>(
+        &self,
+        xs: &ArrayBase<Sqx, Dq>,
+        ys: &ArrayBase<Sqy, Dq>,
+        mut buffer: ArrayViewMut<
+            '_,
+            Sd::Elem,
+            <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output,
+        >,
+    ) -> Result<(), InterpolateError>
+    where
+        Sqx: Data<Elem = Sd::Elem>,
+        Sqy: Data<Elem = Sy::Elem>,
+        Dq: Dimension,
+        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
+    {
+        assert!(
+            xs.shape() == ys.shape(),
+            "`xs.shape()` and `ys.shape()` do not match"
+        );
+        for (index, &x) in xs.indexed_iter() {
+            let current_dim = index.clone().into_dimension();
+            let y = *ys
+                .get(current_dim.clone())
+                .unwrap_or_else(|| unreachable!());
+            let subview =
+                buffer.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| {
+                    match current_dim.as_array_view().get(nr) {
+                        Some(idx) => Slice::from(*idx..*idx + 1),
+                        None => Slice::from(..),
+                    }
+                });
+
+            self.strategy.interp_into(
+                self,
+                subview
+                    .into_shape(
+                        self.data
+                            .raw_dim()
+                            .remove_axis(Axis(0))
+                            .remove_axis(Axis(0)),
+                    )
+                    .map_err(|err| {
+                        let mut expect_dim =
+                            <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
+                        expect_dim
+                            .as_array_view_mut()
+                            .into_iter()
+                            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
+                            .for_each(|(new_axis, &len)| {
+                                *new_axis = len;
+                            });
+                        let expect_dim = expect_dim.into_pattern();
+                        let got_dim = xs.dim();
+                        let string = format!("Expected {expect_dim:?}, got {got_dim:?}");
+                        InterpolateError::ShapeError(err, string)
+                    })?,
+                x,
+                y,
+            )?;
+        }
+        Ok(())
+    }
+
     /// Create a interpolator without any data validation. This is fast and cheap.
     ///
     /// # Safety
@@ -140,99 +261,6 @@ where
             strategy,
             buffer,
         }
-    }
-
-    /// Calculate the interpolated values at `(x, y)`.
-    /// Returns the interpolated data in an array two dimensions smaller than
-    /// the data dimension.
-    ///
-    /// Concider using [`interp_scalar(x, y)`](Interp2D::interp_scalar)
-    /// when the data dimension is [`type@Ix2`]
-    pub fn interp(
-        &self,
-        x: Sx::Elem,
-        y: Sy::Elem,
-    ) -> Result<Array<Sd::Elem, <D::Smaller as Dimension>::Smaller>, InterpolateError> {
-        let dim = self
-            .data
-            .raw_dim()
-            .remove_axis(Axis(0))
-            .remove_axis(Axis(0));
-        let mut target = Array::zeros(dim);
-        self.strategy
-            .interp_into(self, target.view_mut(), x, y)
-            .map(|_| target)
-    }
-
-    /// Calculate the interpolated values at all points in `(xs, ys)`
-    ///
-    /// # Dimensions
-    /// given the data dimension `N` and the query dimension `M` the return array
-    /// will have the dimension `M + N - 2` where the fist `M` dimensions correspond
-    /// to the query dimenions of `xs` and `ys`
-    ///
-    /// Lets assume we hava a data dimension of `N = (2, 3, 4, 5)` and query this data
-    /// with an array of dimension `M = (10)`, the return dimension will be `(10, 4, 5)`
-    /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
-    ///
-    /// # panics
-    /// when `xs.shape() != ys.shape()`
-    pub fn interp_array<Sqx, Sqy, Dq>(
-        &self,
-        xs: &ArrayBase<Sqx, Dq>,
-        ys: &ArrayBase<Sqy, Dq>,
-    ) -> Result<
-        Array<Sd::Elem, <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>,
-        InterpolateError,
-    >
-    where
-        Sqx: Data<Elem = Sd::Elem>,
-        Sqy: Data<Elem = Sy::Elem>,
-        Dq: Dimension,
-        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
-    {
-        let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
-        assert!(
-            xs.shape() == ys.shape(),
-            "`xs.shape()` and `ys.shape()` do not match"
-        );
-        dim.as_array_view_mut()
-            .into_iter()
-            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
-            .for_each(|(new_axis, &len)| {
-                *new_axis = len;
-            });
-        let mut zs = Array::zeros(dim);
-        for (index, &x) in xs.indexed_iter() {
-            let current_dim = index.clone().into_dimension();
-            let y = *ys
-                .get(current_dim.clone())
-                .unwrap_or_else(|| unreachable!());
-            let subview =
-                zs.slice_each_axis_mut(|AxisDescription { axis: Axis(nr), .. }| match current_dim
-                    .as_array_view()
-                    .get(nr)
-                {
-                    Some(idx) => Slice::from(*idx..*idx + 1),
-                    None => Slice::from(..),
-                });
-
-            self.strategy.interp_into(
-                self,
-                subview
-                    .into_shape(
-                        self.data
-                            .raw_dim()
-                            .remove_axis(Axis(0))
-                            .remove_axis(Axis(0)),
-                    )
-                    .unwrap_or_else(|_| unreachable!()),
-                x,
-                y,
-            )?;
-        }
-
-        Ok(zs)
     }
 
     /// get `(x, y, data)` coordinate at the given index
@@ -285,6 +313,49 @@ where
         self.y[0] <= y && y <= self.y[self.y.len() - 1]
     }
 }
+
+macro_rules! impl_interp_for_dim {
+    ($dim:ty) => {
+        impl<Sd, Sx, Sy, Strat> Interp2D<Sd, Sx, Sy, $dim, Strat>
+        where
+            Sd: Data,
+            Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
+            Sx: Data<Elem = Sd::Elem>,
+            Sy: Data<Elem = Sd::Elem>,
+            Strat: Interp2DStrategy<Sd, Sx, Sy, $dim>,
+        {
+            /// Calculate the interpolated values at `(x, y)`.
+            /// Returns the interpolated data in an array two dimensions smaller than
+            /// the data dimension.
+            ///
+            /// [`interp`](Interp1D::interp)
+            pub fn interp(
+                &self,
+                x: Sx::Elem,
+                y: Sy::Elem,
+            ) -> Result<
+                Array<Sd::Elem, <<$dim as Dimension>::Smaller as Dimension>::Smaller>,
+                InterpolateError,
+            > {
+                let dim = self
+                    .data
+                    .raw_dim()
+                    .remove_axis(Axis(0))
+                    .remove_axis(Axis(0));
+                let mut target = Array::zeros(dim);
+                self.strategy
+                    .interp_into(self, target.view_mut(), x, y)
+                    .map(|_| target)
+            }
+        }
+    };
+}
+
+impl_interp_for_dim!(Ix3);
+impl_interp_for_dim!(Ix4);
+impl_interp_for_dim!(Ix5);
+impl_interp_for_dim!(Ix6);
+impl_interp_for_dim!(IxDyn);
 
 /// Create and configure a [Interp2D] interpolator.
 #[derive(Debug)]
