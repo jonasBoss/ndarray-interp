@@ -515,3 +515,50 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ndarray::{Array, Array1, IxDyn};
+    use rand::{
+        distributions::{uniform::SampleUniform, Uniform},
+        rngs::StdRng,
+        Rng, SeedableRng,
+    };
+
+    use super::Interp2D;
+
+    fn rand_arr<T: SampleUniform>(size: usize, range: (T, T), seed: u64) -> Array1<T> {
+        Array::from_iter(
+            StdRng::seed_from_u64(seed)
+                .sample_iter(Uniform::new_inclusive(range.0, range.1))
+                .take(size),
+        )
+    }
+
+    macro_rules! test_dim {
+        ($name:ident, $dim:expr, $shape:expr) => {
+            #[test]
+            fn $name() {
+                let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
+                    .into_shape($shape)
+                    .unwrap();
+                let res = Interp2D::builder(arr).build().unwrap().interp(2.2, 2.2).unwrap();
+                assert_eq!(res.ndim(), $dim - 2);
+            }
+        };
+    }
+
+    #[test]
+    fn interp2d_2d() {
+        let arr = rand_arr(16, (0.0, 1.0), 64)                    
+            .into_shape((4,4))
+            .unwrap();
+        let _: f64 = Interp2D::builder(arr).build().unwrap().interp(2.2, 2.2).unwrap();
+        // type check the return as f64
+    }
+    test_dim!(interp2d_3d, 3, (4, 4, 4));
+    test_dim!(interp2d_4d, 4, (4, 4, 4, 4));
+    test_dim!(interp2d_5d, 5, (4, 4, 4, 4, 4));
+    test_dim!(interp2d_6d, 6, (4, 4, 4, 4, 4, 4));
+    test_dim!(interp2d_7d, 7, IxDyn(&[4, 4, 4, 4, 4, 4, 4]));
+}
