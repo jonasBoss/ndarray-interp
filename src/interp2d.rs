@@ -11,14 +11,13 @@
 //! # Strategies
 //!  - [`Biliniar`] Linear interpolation strategy
 
-use std::{cell::RefCell, fmt::Debug, ops::Sub};
+use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd,
     Dimension, IntoDimension, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
-use thread_local::ThreadLocal;
 
 use crate::{
     vector_extensions::{Monotonic, VectorExtensions},
@@ -44,9 +43,6 @@ where
     y: ArrayBase<Sy, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
-
-    /// a thread local buffer, used by interp_scalar to avoid heap allocations
-    buffer: ThreadLocal<RefCell<Array<Sd::Elem, <D::Smaller as Dimension>::Smaller>>>,
 }
 
 impl<Sd, D> Interp2D<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar>
@@ -81,17 +77,12 @@ where
     /// the data dimension.
     /// When the data dimension is [`type@Ix2`] it returns [`Sd::Elem`](ndarray::RawData::Elem)
     pub fn interp(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
-        let mut buffer = self
-            .buffer
-            .get_or(|| {
-                let dim = self
-                    .data
-                    .raw_dim()
-                    .remove_axis(Axis(0))
-                    .remove_axis(Axis(0));
-                RefCell::new(Array::zeros(dim))
-            })
-            .borrow_mut();
+        let dim = self
+            .data
+            .raw_dim()
+            .remove_axis(Axis(0))
+            .remove_axis(Axis(0));
+        let mut buffer = Array::zeros(dim);
         self.strategy
             .interp_into(self, buffer.view_mut(), x, y)
             .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
@@ -253,13 +244,11 @@ where
         data: ArrayBase<Sd, D>,
         strategy: Strat,
     ) -> Self {
-        let buffer = ThreadLocal::new();
         Interp2D {
             x,
             y,
             data,
             strategy,
-            buffer,
         }
     }
 
@@ -505,13 +494,11 @@ where
         }
 
         let strategy = stratgy_builder.build(&x, &y, &data)?;
-        let buffer = ThreadLocal::new();
         Ok(Interp2D {
             x,
             y,
             data,
             strategy,
-            buffer,
         })
     }
 }

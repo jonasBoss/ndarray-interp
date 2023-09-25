@@ -12,14 +12,13 @@
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy
 
-use std::{cell::RefCell, fmt::Debug, ops::Sub};
+use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
     IntoDimension, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
-use thread_local::ThreadLocal;
 
 use crate::{
     vector_extensions::{Monotonic, VectorExtensions},
@@ -45,9 +44,6 @@ where
     x: ArrayBase<Sx, Ix1>,
     data: ArrayBase<Sd, D>,
     strategy: Strat,
-
-    /// a thread local buffer, used by interp_scalar to avoid heap allocations
-    buffer: ThreadLocal<RefCell<Array<Sd::Elem, D::Smaller>>>,
 }
 
 impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
@@ -97,13 +93,9 @@ where
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
     /// ```
     pub fn interp(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
-        let mut buffer = self
-            .buffer
-            .get_or(|| {
-                let dim = self.data.raw_dim().remove_axis(Axis(0));
-                RefCell::new(Array::zeros(dim))
-            })
-            .borrow_mut();
+        let dim = self.data.raw_dim().remove_axis(Axis(0));
+        let mut buffer = Array::zeros(dim);
+
         self.strategy
             .interp_into(self, buffer.view_mut(), x)
             .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
@@ -281,13 +273,7 @@ where
     ///  - `data.shape()[0] == x.len()`
     ///  - the `strategy` is porperly initialized with the data
     pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
-        let buffer = ThreadLocal::new();
-        Interp1D {
-            x,
-            data,
-            strategy,
-            buffer,
-        }
+        Interp1D { x, data, strategy }
     }
 
     /// get `(x, data)` coordinate at given index
@@ -451,13 +437,7 @@ where
 
         let strategy = strategy.build(&x, &data)?;
 
-        let buffer = ThreadLocal::new();
-        Ok(Interp1D {
-            x,
-            data,
-            strategy,
-            buffer,
-        })
+        Ok(Interp1D { x, data, strategy })
     }
 }
 
