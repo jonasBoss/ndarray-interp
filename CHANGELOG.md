@@ -1,3 +1,9 @@
+# 0.4.0
+ - performance improvement for `Interp2D` (`Interp2D::index_point()` is now much faster)
+ - deprecate `interp_scalar()` methods. `interp()` methods are now specialized for all possible `D`
+ - add `interp_into()` and `interp_array_into()` methods for interpolating into a user provided `ArrayViewMut`
+ this can improve performance by avoiding memory allocations.
+
 # 0.3.2
 performance improvement for `VectorExtensions::get_lower_index`.
 From -24% for evenly spaced values up to 72% for randomized and 
