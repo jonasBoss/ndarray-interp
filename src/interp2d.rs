@@ -269,21 +269,8 @@ where
             self.x[x_idx],
             self.y[y_idx],
             self.data
-                .slice_each_axis(|AxisDescription { axis, .. }| match axis {
-                    Axis(0) => Slice {
-                        start: x_idx as isize,
-                        end: Some(x_idx as isize + 1),
-                        step: 1,
-                    },
-                    Axis(1) => Slice {
-                        start: y_idx as isize,
-                        end: Some(y_idx as isize + 1),
-                        step: 1,
-                    },
-                    _ => Slice::from(..),
-                })
-                .remove_axis(Axis(0))
-                .remove_axis(Axis(0)),
+                .index_axis(Axis(0), x_idx)
+                .index_axis_move(Axis(0), y_idx),
         )
     }
 
