@@ -16,7 +16,7 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix1, Ix2, Ix3, Ix4, Ix5, Ix6, IxDyn, OwnedRepr, RemoveAxis, Slice,
+    IntoDimension, Ix0, Ix1, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
 
@@ -65,14 +65,43 @@ where
     Sx: Data<Elem = Sd::Elem>,
     Strat: Interp1DStrategy<Sd, Sx, Ix1>,
 {
-    #[deprecated(since = "0.4.0", note = "use `Interp1D::interp` instead")]
+    /// convinient interpolation function for interpolation at one point
+    /// when the data dimension is [`type@Ix1`]
+    ///
+    /// ```rust
+    /// # use ndarray_interp::*;
+    /// # use ndarray_interp::interp1d::*;
+    /// # use ndarray::*;
+    /// # use approx::*;
+    /// let data = array![1.0, 1.5, 2.0];
+    /// let x =    array![1.0, 2.0, 3.0];
+    /// let query = 1.5;
+    /// let expected = 1.25;
+    ///
+    /// let interpolator = Interp1DBuilder::new(data).x(x).build().unwrap();
+    /// let result = interpolator.interp_scalar(query).unwrap();
+    /// # assert_eq!(result, expected);
+    /// ```
     pub fn interp_scalar(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
-        self.interp(x)
+        let mut buffer = Array::zeros(Ix0());
+        self.strategy
+            .interp_into(self, buffer.view_mut(), x)
+            .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
+            .copied()
     }
+}
 
+impl<Sd, Sx, D, Strat> Interp1D<Sd, Sx, D, Strat>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
+    Sx: Data<Elem = Sd::Elem>,
+    D: Dimension + RemoveAxis,
+    Strat: Interp1DStrategy<Sd, Sx, D>,
+{
     /// Calculate the interpolated values at `x`.
     /// Returns the interpolated data in an array one dimension smaller than
-    /// the data dimension. When the data dimension is [`type@Ix1`] it returns [`Sd::Elem`](ndarray::RawData::Elem)
+    /// the data dimension.
     ///
     /// ```rust
     /// # use ndarray_interp::*;
@@ -92,25 +121,17 @@ where
     /// let result = interpolator.interp(query).unwrap();
     /// # assert_abs_diff_eq!(result, expected, epsilon=f64::EPSILON);
     /// ```
-    pub fn interp(&self, x: Sx::Elem) -> Result<Sd::Elem, InterpolateError> {
+    ///
+    /// Concider using [`interp_scalar(x)`](Interp1D::interp_scalar)
+    /// when the data dimension is [`type@Ix1`]
+    pub fn interp(&self, x: Sx::Elem) -> Result<Array<Sd::Elem, D::Smaller>, InterpolateError> {
         let dim = self.data.raw_dim().remove_axis(Axis(0));
-        let mut buffer = Array::zeros(dim);
-
+        let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
         self.strategy
-            .interp_into(self, buffer.view_mut(), x)
-            .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
-            .copied()
+            .interp_into(self, target.view_mut(), x)
+            .map(|_| target)
     }
-}
 
-impl<Sd, Sx, D, Strat> Interp1D<Sd, Sx, D, Strat>
-where
-    Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
-    Sx: Data<Elem = Sd::Elem>,
-    D: Dimension + RemoveAxis,
-    Strat: Interp1DStrategy<Sd, Sx, D>,
-{
     /// Calculate the interpolated values at `x`.
     /// and stores the result into the provided buffer
     ///
@@ -298,40 +319,6 @@ where
     }
 }
 
-macro_rules! impl_interp_for_dim {
-    ($dim:ty) => {
-        impl<Sd, Sx, Strat> Interp1D<Sd, Sx, $dim, Strat>
-        where
-            Sd: Data,
-            Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
-            Sx: Data<Elem = Sd::Elem>,
-            Strat: Interp1DStrategy<Sd, Sx, $dim>,
-        {
-            /// Calculate the interpolated values at `x`.
-            /// Returns the interpolated data in an array one dimension smaller than
-            /// the data dimension.
-            /// [`interp`](Interp1D::interp)
-            pub fn interp(
-                &self,
-                x: Sx::Elem,
-            ) -> Result<Array<Sd::Elem, <$dim as Dimension>::Smaller>, InterpolateError> {
-                let dim = self.data.raw_dim().remove_axis(Axis(0));
-                let mut target: Array<Sd::Elem, _> = Array::zeros(dim);
-                self.strategy
-                    .interp_into(self, target.view_mut(), x)
-                    .map(|_| target)
-            }
-        }
-    };
-}
-
-impl_interp_for_dim!(Ix2);
-impl_interp_for_dim!(Ix3);
-impl_interp_for_dim!(Ix4);
-impl_interp_for_dim!(Ix5);
-impl_interp_for_dim!(Ix6);
-impl_interp_for_dim!(IxDyn);
-
 /// Create and configure a [Interp1D] Interpolator.
 ///
 /// # Default configuration
@@ -473,16 +460,21 @@ mod tests {
         };
     }
 
-    #[test]
-    fn interp1d_1d() {
-        let arr = rand_arr(4, (0.0, 1.0), 64);
-        let _: f64 = Interp1D::builder(arr).build().unwrap().interp(2.2).unwrap();
-        // type check the return as f64
-    }
+    test_dim!(interp1d_1d, 1, 4);
     test_dim!(interp1d_2d, 2, (4, 4));
     test_dim!(interp1d_3d, 3, (4, 4, 4));
     test_dim!(interp1d_4d, 4, (4, 4, 4, 4));
     test_dim!(interp1d_5d, 5, (4, 4, 4, 4, 4));
     test_dim!(interp1d_6d, 6, (4, 4, 4, 4, 4, 4));
     test_dim!(interp1d_7d, 7, IxDyn(&[4, 4, 4, 4, 4, 4, 4]));
+
+    #[test]
+    fn interp1d_1d_scalar() {
+        let arr = rand_arr(4, (0.0, 1.0), 64);
+        let _res: f64 = Interp1D::builder(arr) // type check f64 as return
+            .build()
+            .unwrap()
+            .interp_scalar(2.2)
+            .unwrap();
+    }
 }

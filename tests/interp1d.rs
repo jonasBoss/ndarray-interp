@@ -22,11 +22,11 @@ fn interp_y_only() {
     let interp = Interp1D::builder(array![1.5, 2.0, 3.0, 4.0, 5.0, 7.0, 7.0, 8.0, 9.0, 10.5])
         .build()
         .unwrap();
-    assert_eq!(interp.interp(0.0).unwrap(), 1.5);
-    assert_eq!(interp.interp(9.0).unwrap(), 10.5);
-    assert_eq!(interp.interp(4.5).unwrap(), 6.0);
-    assert_eq!(interp.interp(0.25).unwrap(), 1.625);
-    assert_eq!(interp.interp(8.75).unwrap(), 10.125);
+    assert_eq!(interp.interp_scalar(0.0).unwrap(), 1.5);
+    assert_eq!(interp.interp_scalar(9.0).unwrap(), 10.5);
+    assert_eq!(interp.interp_scalar(4.5).unwrap(), 6.0);
+    assert_eq!(interp.interp_scalar(0.25).unwrap(), 1.625);
+    assert_eq!(interp.interp_scalar(8.75).unwrap(), 10.125);
 }
 
 #[test]
@@ -35,8 +35,8 @@ fn extrapolate_y_only() {
         .strategy(Linear::new().extrapolate(true))
         .build()
         .unwrap();
-    assert_eq!(interp.interp(-1.0).unwrap(), 0.0);
-    assert_eq!(interp.interp(3.0).unwrap(), 1.0);
+    assert_eq!(interp.interp_scalar(-1.0).unwrap(), 0.0);
+    assert_eq!(interp.interp_scalar(3.0).unwrap(), 1.0);
 }
 
 #[test]
@@ -46,11 +46,11 @@ fn interp_with_x_and_y() {
         .strategy(Linear::new())
         .build()
         .unwrap();
-    assert_eq!(interp.interp(-4.0).unwrap(), 1.5);
-    assert_eq!(interp.interp(5.0).unwrap(), 10.5);
-    assert_eq!(interp.interp(0.5).unwrap(), 6.0);
-    assert_eq!(interp.interp(-3.75).unwrap(), 1.625);
-    assert_eq!(interp.interp(4.75).unwrap(), 10.125);
+    assert_eq!(interp.interp_scalar(-4.0).unwrap(), 1.5);
+    assert_eq!(interp.interp_scalar(5.0).unwrap(), 10.5);
+    assert_eq!(interp.interp_scalar(0.5).unwrap(), 6.0);
+    assert_eq!(interp.interp_scalar(-3.75).unwrap(), 1.625);
+    assert_eq!(interp.interp_scalar(4.75).unwrap(), 10.125);
 }
 
 #[test]
@@ -62,10 +62,10 @@ fn interp_with_x_and_y_expspaced() {
         .strategy(Linear::new())
         .build()
         .unwrap();
-    assert_eq!(interp.interp(1.0).unwrap(), 1.0);
-    assert_eq!(interp.interp(512.0).unwrap(), 1.0);
-    assert_eq!(interp.interp(42.0).unwrap(), 4.6875);
-    assert_eq!(interp.interp(365.0).unwrap(), 1.57421875);
+    assert_eq!(interp.interp_scalar(1.0).unwrap(), 1.0);
+    assert_eq!(interp.interp_scalar(512.0).unwrap(), 1.0);
+    assert_eq!(interp.interp_scalar(42.0).unwrap(), 4.6875);
+    assert_eq!(interp.interp_scalar(365.0).unwrap(), 1.57421875);
 }
 
 #[test]
@@ -75,8 +75,8 @@ fn extrapolate_with_x_and_y() {
         .strategy(Linear::new().extrapolate(true))
         .build()
         .unwrap();
-    assert_eq!(interp.interp(-1.0).unwrap(), 2.0);
-    assert_eq!(interp.interp(2.0).unwrap(), 3.0);
+    assert_eq!(interp.interp_scalar(-1.0).unwrap(), 2.0);
+    assert_eq!(interp.interp_scalar(2.0).unwrap(), 3.0);
 }
 
 #[test]
@@ -147,11 +147,11 @@ fn interp_view_array() {
         .build()
         .unwrap();
     println!("{:?}", interp.interp(5.0).unwrap());
-    assert_eq!(interp.interp(-4.0).unwrap(), 10.0);
-    assert_eq!(interp.interp(5.0).unwrap(), 1.0);
-    assert_eq!(interp.interp(0.0).unwrap(), 6.0);
-    assert_eq!(interp.interp(-3.5).unwrap(), 9.5);
-    assert_eq!(interp.interp(4.75).unwrap(), 1.25);
+    assert_eq!(interp.interp_scalar(-4.0).unwrap(), 10.0);
+    assert_eq!(interp.interp_scalar(5.0).unwrap(), 1.0);
+    assert_eq!(interp.interp_scalar(0.0).unwrap(), 6.0);
+    assert_eq!(interp.interp_scalar(-3.5).unwrap(), 9.5);
+    assert_eq!(interp.interp_scalar(4.75).unwrap(), 1.25);
 }
 
 #[test]
