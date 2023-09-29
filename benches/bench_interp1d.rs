@@ -14,6 +14,14 @@ fn bench_interp1d_scalar(c: &mut Criterion) {
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
 
+    c.bench_function("1D scalar `interp_scalar`", |b| {
+        b.iter(|| {
+            for &x in &query {
+                interp.interp_scalar(x).unwrap();
+            }
+        })
+    });
+
     c.bench_function("1D scalar `interp`", |b| {
         b.iter(|| {
             for &x in &query {
@@ -42,6 +50,14 @@ fn bench_interp1d_scalar_multithread(c: &mut Criterion) {
     let data = Array::from_rand(100, (0.0, 1.0), 42);
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
+
+    c.bench_function("1D scalar MT `interp_scalar`", |b| {
+        b.iter(|| {
+            query.par_iter().for_each(|&x| {
+                interp.interp_scalar(x).unwrap();
+            });
+        })
+    });
 
     c.bench_function("1D scalar MT `interp`", |b| {
         b.iter(|| {
