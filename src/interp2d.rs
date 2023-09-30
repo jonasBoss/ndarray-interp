@@ -131,8 +131,14 @@ where
     /// Calculate the interpolated values at `(x, y)`.
     /// and stores the result into the provided buffer
     ///
+    /// The provided buffer must have the same shape as the interpolation data
+    /// with the first two axes removed.
+    ///
     /// This can improve performance compared to [`interp`](Interp2D::interp)
     /// because it does not allocate any memory for the result
+    ///
+    /// # Panics
+    /// When the buffer does not have the correct shape.
     #[inline]
     pub fn interp_into(
         &self,
@@ -188,7 +194,7 @@ where
     /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
     ///
     /// # panics
-    /// when `xs.shape() != ys.shape()`
+    /// when `xs.shape() != ys.shape()` or when the buffer does not have the correct shape.
     pub fn interp_array_into<Sqx, Sqy, Dq>(
         &self,
         xs: &ArrayBase<Sqx, Dq>,
@@ -203,6 +209,7 @@ where
         Sqx: Data<Elem = Sd::Elem>,
         Sqy: Data<Elem = Sy::Elem>,
         Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
+        <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output: DimExtension,
     {
         assert!(
             xs.shape() == ys.shape(),
@@ -221,33 +228,21 @@ where
                     }
                 });
 
-            self.strategy.interp_into(
-                self,
-                subview
-                    .into_shape(
-                        self.data
-                            .raw_dim()
-                            .remove_axis(Axis(0))
-                            .remove_axis(Axis(0)),
-                    )
-                    .map_err(|err| {
-                        let mut expect_dim =
-                            <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
-                        expect_dim
-                            .as_array_view_mut()
-                            .into_iter()
-                            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
-                            .for_each(|(new_axis, &len)| {
-                                *new_axis = len;
-                            });
-                        let expect_dim = expect_dim.into_pattern();
-                        let got_dim = xs.dim();
-                        let string = format!("Expected {expect_dim:?}, got {got_dim:?}");
-                        InterpolateError::ShapeError(err, string)
-                    })?,
-                x,
-                y,
-            )?;
+            let subview = match subview.into_shape(
+                self.data
+                    .raw_dim()
+                    .remove_axis(Axis(0))
+                    .remove_axis(Axis(0)),
+            ) {
+                Ok(view) => view,
+                Err(err) => {
+                    let expect = self.get_buffer_shape(xs.raw_dim()).into_pattern();
+                    let got = buffer.dim();
+                    panic!("{err} expected: {expect:?}, got: {got:?}")
+                }
+            };
+
+            self.strategy.interp_into(self, subview, x, y)?;
         }
         Ok(())
     }
