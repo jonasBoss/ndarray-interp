@@ -1,7 +1,8 @@
 # 0.4.0
- - performance improvement for `Interp2D` (`Interp2D::index_point()` is now much faster)
+ - performance improvement for `Interp2D` (`Interp2D::index_point()` is now much faster) -50% for most interpolation methods
  - add `interp_into()` and `interp_array_into()` methods for interpolating into a user provided `ArrayViewMut`
  this can improve performance by avoiding memory allocations.
+ - fix crash when `IxDyn` dimensions are involved.
 
 # 0.3.2
 performance improvement for `VectorExtensions::get_lower_index`.
