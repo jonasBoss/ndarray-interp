@@ -15,11 +15,12 @@ use std::{fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd,
-    Dimension, IntoDimension, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice, Ix0,
+    Dimension, IntoDimension, Ix0, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice,
 };
 use num_traits::{cast, Num, NumCast};
 
 use crate::{
+    dim_extensions::DimExtension,
     vector_extensions::{Monotonic, VectorExtensions},
     BuilderError, InterpolateError,
 };
@@ -159,20 +160,14 @@ where
     where
         Sqx: Data<Elem = Sd::Elem>,
         Sqy: Data<Elem = Sy::Elem>,
-        Dq: Dimension,
-        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
+        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
+        <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output: DimExtension,
     {
         assert!(
             xs.shape() == ys.shape(),
             "`xs.shape()` and `ys.shape()` do not match"
         );
-        let mut dim = <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::default();
-        dim.as_array_view_mut()
-            .into_iter()
-            .zip(xs.shape().iter().chain(self.data.shape()[2..].iter()))
-            .for_each(|(new_axis, &len)| {
-                *new_axis = len;
-            });
+        let dim = self.get_buffer_shape(xs.raw_dim());
         let mut zs = Array::zeros(dim);
         self.interp_array_into(xs, ys, zs.view_mut()).map(|_| zs)
     }
@@ -207,8 +202,7 @@ where
     where
         Sqx: Data<Elem = Sd::Elem>,
         Sqy: Data<Elem = Sy::Elem>,
-        Dq: Dimension,
-        Dq: DimAdd<<D::Smaller as Dimension>::Smaller>,
+        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
     {
         assert!(
             xs.shape() == ys.shape(),
@@ -256,6 +250,25 @@ where
             )?;
         }
         Ok(())
+    }
+
+    /// the required shape of the buffer when calling [`interp_array_into`]
+    fn get_buffer_shape<Dq>(
+        &self,
+        dq: Dq,
+    ) -> <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output
+    where
+        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
+        <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output: DimExtension,
+    {
+        let lenghts: Vec<_> = dq
+            .as_array_view()
+            .iter()
+            .chain(self.data.shape()[2..].iter())
+            .copied()
+            .collect();
+        <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output::try_new(&lenghts)
+            .unwrap_or_else(|| unreachable!())
     }
 
     /// Create a interpolator without any data validation. This is fast and cheap.
@@ -476,7 +489,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{Array, Array1, IxDyn};
+    use approx::assert_abs_diff_eq;
+    use ndarray::{array, Array, Array1, IxDyn};
     use rand::{
         distributions::{uniform::SampleUniform, Uniform},
         rngs::StdRng,
@@ -500,12 +514,24 @@ mod tests {
                 let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
                     .into_shape($shape)
                     .unwrap();
-                let res = Interp2D::builder(arr)
-                    .build()
-                    .unwrap()
-                    .interp(2.2, 2.2)
-                    .unwrap();
+                let interp = Interp2D::builder(arr).build().unwrap();
+                let res = interp.interp(2.2, 2.2).unwrap();
                 assert_eq!(res.ndim(), $dim - 2);
+
+                let mut buf = Array::zeros(res.dim());
+                interp.interp_into(2.2, 2.2, buf.view_mut()).unwrap();
+                assert_abs_diff_eq!(buf, res, epsilon = f64::EPSILON);
+
+                let x_query = array![[0.5, 1.0], [1.5, 2.0]];
+                let y_query = array![[1.5, 2.0], [2.5, 3.0]];
+                let res = interp.interp_array(&x_query, &y_query).unwrap();
+                assert_eq!(res.ndim(), $dim - 2 + x_query.ndim());
+
+                let mut buf = Array::zeros(res.dim());
+                interp
+                    .interp_array_into(&x_query, &y_query, buf.view_mut())
+                    .unwrap();
+                assert_abs_diff_eq!(buf, res, epsilon = f64::EPSILON);
             }
         };
     }
@@ -516,16 +542,17 @@ mod tests {
     test_dim!(interp2d_5d, 5, (4, 4, 4, 4, 4));
     test_dim!(interp2d_6d, 6, (4, 4, 4, 4, 4, 4));
     test_dim!(interp2d_7d, 7, IxDyn(&[4, 4, 4, 4, 4, 4, 4]));
+    test_dim!(interp2d_8d, 8, IxDyn(&[4, 4, 4, 4, 4, 4, 4, 4]));
 
     #[test]
-    fn interp2d_2d_scalar(){
-    let arr = rand_arr(4usize.pow(2), (0.0, 1.0), 64)
-        .into_shape((4, 4))
-        .unwrap();
-    let _res: f64 = Interp2D::builder(arr) // typecheck f64 as return type
-        .build()
-        .unwrap()
-        .interp_scalar(2.2, 2.2)
-        .unwrap();
+    fn interp2d_2d_scalar() {
+        let arr = rand_arr(4usize.pow(2), (0.0, 1.0), 64)
+            .into_shape((4, 4))
+            .unwrap();
+        let _res: f64 = Interp2D::builder(arr) // typecheck f64 as return type
+            .build()
+            .unwrap()
+            .interp_scalar(2.2, 2.2)
+            .unwrap();
     }
 }

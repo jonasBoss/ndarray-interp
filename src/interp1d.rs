@@ -21,6 +21,7 @@ use ndarray::{
 use num_traits::{cast, Num, NumCast};
 
 use crate::{
+    dim_extensions::DimExtension,
     vector_extensions::{Monotonic, VectorExtensions},
     BuilderError, InterpolateError,
 };
@@ -173,14 +174,11 @@ where
     where
         Sq: Data<Elem = Sd::Elem>,
         Dq: Dimension + DimAdd<D::Smaller>,
+        <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
     {
-        let mut dim = <Dq as DimAdd<D::Smaller>>::Output::default();
-        dim.as_array_view_mut()
-            .into_iter()
-            .zip(xs.shape().iter().chain(self.data.shape()[1..].iter()))
-            .for_each(|(new_axis, &len)| {
-                *new_axis = len;
-            });
+        let dim = self.get_buffer_shape(xs.raw_dim());
+        debug_assert_eq!(dim.ndim(), self.data.ndim() + xs.ndim() - 1);
+
         let mut ys = Array::zeros(dim);
         self.interp_array_into(xs, ys.view_mut()).map(|_| ys)
     }
@@ -284,6 +282,21 @@ where
             )?;
         }
         Ok(())
+    }
+
+    /// the required shape of the buffer when calling [`interp_array_into`]
+    fn get_buffer_shape<Dq>(&self, dq: Dq) -> <Dq as DimAdd<D::Smaller>>::Output
+    where
+        Dq: Dimension + DimAdd<D::Smaller>,
+        <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
+    {
+        let lenghts: Vec<_> = dq
+            .as_array_view()
+            .iter()
+            .chain(self.data.shape()[1..].iter())
+            .copied()
+            .collect();
+        <Dq as DimAdd<D::Smaller>>::Output::try_new(&lenghts).unwrap_or_else(|| unreachable!())
     }
 
     /// Create a interpolator without any data validation. This is fast and cheap.
@@ -430,7 +443,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{Array, Array1, IxDyn};
+    use approx::assert_abs_diff_eq;
+    use ndarray::{array, Array, Array1, IxDyn};
     use rand::{
         distributions::{uniform::SampleUniform, Uniform},
         rngs::StdRng,
@@ -447,15 +461,34 @@ mod tests {
         )
     }
 
+    macro_rules! get_interp {
+        ($dim:expr, $shape:expr) => {{
+            let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
+                .into_shape($shape)
+                .unwrap();
+            Interp1D::builder(arr).build().unwrap()
+        }};
+    }
+
     macro_rules! test_dim {
         ($name:ident, $dim:expr, $shape:expr) => {
             #[test]
             fn $name() {
-                let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
-                    .into_shape($shape)
-                    .unwrap();
-                let res = Interp1D::builder(arr).build().unwrap().interp(2.2).unwrap();
+                let interp = get_interp!($dim, $shape);
+                let res = interp.interp(2.2).unwrap();
                 assert_eq!(res.ndim(), $dim - 1);
+
+                let mut buf = Array::zeros(res.dim());
+                interp.interp_into(2.2, buf.view_mut()).unwrap();
+                assert_abs_diff_eq!(buf, res, epsilon = f64::EPSILON);
+
+                let query = array![[0.5, 1.0], [1.5, 2.0]];
+                let res = interp.interp_array(&query).unwrap();
+                assert_eq!(res.ndim(), $dim - 1 + query.ndim());
+
+                let mut buf = Array::zeros(res.dim());
+                interp.interp_array_into(&query, buf.view_mut()).unwrap();
+                assert_abs_diff_eq!(buf, res, epsilon = f64::EPSILON);
             }
         };
     }
@@ -477,4 +510,23 @@ mod tests {
             .interp_scalar(2.2)
             .unwrap();
     }
+
+    // #[test]
+    // fn interp1d_2d_into() {
+    //     let interp = get_interp!(2, (4, 4));
+    //     let mut buf = Array::zeros(3);
+    //     interp.interp_into(2.2, buf.view_mut()).unwrap();
+    // }
+
+    // #[test]
+    // fn interp1d_2d_array_into() {
+    //     let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
+    //         .into_shape((4, 4))
+    //         .unwrap();
+    //     let interp = Interp1D::builder(arr).build().unwrap();
+    //     let mut buf = Array::zeros((2, 3));
+    //     interp
+    //         .interp_array_into(&array![2.2, 2.4], buf.view_mut())
+    //         .unwrap();
+    // }
 }

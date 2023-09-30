@@ -16,6 +16,7 @@
 use ndarray::ShapeError;
 use thiserror::Error;
 
+mod dim_extensions;
 pub mod interp1d;
 pub mod interp2d;
 pub mod vector_extensions;
