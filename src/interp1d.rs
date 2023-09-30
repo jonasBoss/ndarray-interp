@@ -288,13 +288,9 @@ where
         Dq: Dimension + DimAdd<D::Smaller>,
         <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
     {
-        let lenghts: Vec<_> = dq
-            .as_array_view()
-            .iter()
-            .chain(self.data.shape()[1..].iter())
-            .copied()
-            .collect();
-        <Dq as DimAdd<D::Smaller>>::Output::try_new(&lenghts).unwrap_or_else(|| unreachable!())
+        let binding = dq.as_array_view();
+        let lenghts = binding.iter().chain(self.data.shape()[1..].iter()).copied();
+        <Dq as DimAdd<D::Smaller>>::Output::new(lenghts)
     }
 
     /// Create a interpolator without any data validation. This is fast and cheap.
