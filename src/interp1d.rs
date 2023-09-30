@@ -134,11 +134,16 @@ where
     }
 
     /// Calculate the interpolated values at `x`.
-    /// and stores the result into the provided buffer
+    /// and stores the result into the provided buffer.
+    ///
+    /// The provided buffer must have the same shape as the interpolation data
+    /// with the first axis removed.
     ///
     /// This can improve performance compared to [`interp`](Interp1D::interp)
     /// because it does not allocate any memory for the result
-    #[inline]
+    ///
+    /// # Panics
+    /// When the buffer does not have the correct shape.
     pub fn interp_into(
         &self,
         x: Sx::Elem,
@@ -239,7 +244,9 @@ where
     /// interpolator.interp_array_into(&query, buffer.view_mut()).unwrap();
     /// # assert_abs_diff_eq!(buffer, expected, epsilon=f64::EPSILON);
     /// ```
-    #[inline]
+    ///
+    /// # panics
+    /// When the provided buffer has the wrong shape
     pub fn interp_array_into<Sq, Dq>(
         &self,
         xs: &ArrayBase<Sq, Dq>,
@@ -248,6 +255,7 @@ where
     where
         Sq: Data<Elem = Sd::Elem>,
         Dq: Dimension + DimAdd<D::Smaller>,
+        <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
     {
         // Perform interpolation for each index
         for (index, &x) in xs.indexed_iter() {
@@ -260,26 +268,16 @@ where
                     }
                 });
 
-            self.strategy.interp_into(
-                self,
-                subview
-                    .into_shape(self.data.raw_dim().remove_axis(Axis(0)))
-                    .map_err(|err| {
-                        let mut expect_dim = <Dq as DimAdd<D::Smaller>>::Output::default();
-                        expect_dim
-                            .as_array_view_mut()
-                            .into_iter()
-                            .zip(xs.shape().iter().chain(self.data.shape()[1..].iter()))
-                            .for_each(|(new_axis, &len)| {
-                                *new_axis = len;
-                            });
-                        let expect_dim = expect_dim.into_pattern();
-                        let got_dim = xs.dim();
-                        let string = format!("Expected {expect_dim:?}, got {got_dim:?}");
-                        InterpolateError::ShapeError(err, string)
-                    })?,
-                x,
-            )?;
+            let subview = match subview.into_shape(self.data.raw_dim().remove_axis(Axis(0))) {
+                Ok(view) => view,
+                Err(err) => {
+                    let expect = self.get_buffer_shape(xs.raw_dim()).into_pattern();
+                    let got = buffer.dim();
+                    panic!("{err} expected: {expect:?}, got: {got:?}")
+                }
+            };
+
+            self.strategy.interp_into(self, subview, x)?;
         }
         Ok(())
     }
@@ -511,22 +509,63 @@ mod tests {
             .unwrap();
     }
 
-    // #[test]
-    // fn interp1d_2d_into() {
-    //     let interp = get_interp!(2, (4, 4));
-    //     let mut buf = Array::zeros(3);
-    //     interp.interp_into(2.2, buf.view_mut()).unwrap();
-    // }
+    #[test]
+    #[should_panic(expected = "expected: [3], got: [4]")]
+    fn interp1d_2d_into_too_small() {
+        let interp = get_interp!(2, (4, 4));
+        let mut buf = Array::zeros(3);
+        let _ = interp.interp_into(2.2, buf.view_mut());
+    }
+
+    #[test]
+    #[should_panic(expected = "expected: [5], got: [4]")]
+    fn interp1d_2d_into_too_big() {
+        let interp = get_interp!(2, (4, 4));
+        let mut buf = Array::zeros(5);
+        let _ = interp.interp_into(2.2, buf.view_mut());
+    }
+
+    #[test]
+    #[should_panic]
+    fn interp1d_2d_array_into_too_small1() {
+        let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
+            .into_shape((4, 4))
+            .unwrap();
+        let interp = Interp1D::builder(arr).build().unwrap();
+        let mut buf = Array::zeros((1, 4));
+        let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
+    }
+
+    #[test]
+    #[should_panic(expected = "expected: (2, 4), got: (2, 3)")]
+    fn interp1d_2d_array_into_too_small2() {
+        let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
+            .into_shape((4, 4))
+            .unwrap();
+        let interp = Interp1D::builder(arr).build().unwrap();
+        let mut buf = Array::zeros((2, 3));
+        let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
+    }
 
     // #[test]
-    // fn interp1d_2d_array_into() {
+    // #[should_panic]
+    // fn interp1d_2d_array_into_too_big1() {
     //     let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
     //         .into_shape((4, 4))
     //         .unwrap();
     //     let interp = Interp1D::builder(arr).build().unwrap();
-    //     let mut buf = Array::zeros((2, 3));
-    //     interp
-    //         .interp_array_into(&array![2.2, 2.4], buf.view_mut())
-    //         .unwrap();
+    //     let mut buf = Array::zeros((3, 4));
+    //     let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
     // }
+
+    #[test]
+    #[should_panic(expected = "expected: (2, 4), got: (2, 5)")]
+    fn interp1d_2d_array_into_too_big2() {
+        let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
+            .into_shape((4, 4))
+            .unwrap();
+        let interp = Interp1D::builder(arr).build().unwrap();
+        let mut buf = Array::zeros((2, 5));
+        let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
+    }
 }
