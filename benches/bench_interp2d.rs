@@ -32,18 +32,6 @@ fn bench_interp2d_scalar(c: &mut Criterion) {
             });
         })
     });
-
-    let query_x = query_x.into_shape((2500, 4)).unwrap();
-    let query_y = query_y.into_shape((2500, 4)).unwrap();
-    let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
-    let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
-    c.bench_function("2D scalar `interp_array`", |b| {
-        b.iter(|| {
-            query_arrx.iter().zip(query_arry.iter()).for_each(|(x, y)| {
-                interp.interp_array(x, y).unwrap();
-            });
-        })
-    });
 }
 
 fn bench_interp2d_scalar_multithread(c: &mut Criterion) {
