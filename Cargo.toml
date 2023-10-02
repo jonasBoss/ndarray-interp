@@ -29,5 +29,9 @@ name = "bench_interp1d"
 harness = false
 
 [[bench]]
+name = "bench_interp1d_query_dim"
+harness = false
+
+[[bench]]
 name = "bench_interp2d"
 harness = false
