@@ -30,13 +30,9 @@ fn bench_interp1d_scalar(c: &mut Criterion) {
         })
     });
 
-    let query = query.into_shape((2500, 4)).unwrap();
-    let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
-    c.bench_function("1D scalar `interp_array`", |b| {
+    c.bench_function("1D scalar `interp_array` 1D-long", |b| {
         b.iter(|| {
-            for x in &query_arr {
-                interp.interp_array(x).unwrap();
-            }
+            interp.interp_array(&query).unwrap();
         })
     });
 }
