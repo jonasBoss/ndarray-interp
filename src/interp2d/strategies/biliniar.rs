@@ -68,12 +68,12 @@ where
         let (_, _, z21) = interpolator.index_point(x_idx + 1, y_idx);
         let (x2, y2, z22) = interpolator.index_point(x_idx + 1, y_idx + 1);
 
-        Zip::from(target)
-            .and(z11)
+        Zip::from(z11)
             .and(z12)
             .and(z21)
             .and(z22)
-            .for_each(|z, &z11, &z12, &z21, &z22| {
+            .and(target)
+            .for_each(|&z11, &z12, &z21, &z22, z| {
                 let z1 = Linear::calc_frac((x1, z11), (x2, z21), x);
                 let z2 = Linear::calc_frac((x1, z12), (x2, z22), x);
                 *z = Linear::calc_frac((y1, z1), (y2, z2), y)

@@ -62,7 +62,7 @@ where
         let (x2, y2) = this.index_point(idx + 1);
 
         // do interpolation
-        Zip::from(target).and(y1).and(y2).for_each(|t, &y1, &y2| {
+        Zip::from(y1).and(y2).and(target).for_each(|&y1, &y2, t| {
             *t = Self::calc_frac((x1, y1), (x2, y2), x);
         });
         Ok(())

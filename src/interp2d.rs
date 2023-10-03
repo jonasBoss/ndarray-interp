@@ -11,15 +11,16 @@
 //! # Strategies
 //!  - [`Biliniar`] Linear interpolation strategy
 
-use std::{fmt::Debug, ops::Sub};
+use std::{any::TypeId, fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd,
-    Dimension, IntoDimension, Ix0, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice,
+    Dimension, IntoDimension, Ix0, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice, Zip,
 };
 use num_traits::{cast, Num, NumCast};
 
 use crate::{
+    cast_unchecked,
     dim_extensions::DimExtension,
     vector_extensions::{Monotonic, VectorExtensions},
     BuilderError, InterpolateError,
@@ -138,7 +139,7 @@ where
     /// because it does not allocate any memory for the result
     ///
     /// # Panics
-    /// When the buffer does not have the correct shape.
+    /// When the provided buffer is too small or has the wrong shape
     #[inline]
     pub fn interp_into(
         &self,
@@ -166,7 +167,7 @@ where
     where
         Sqx: Data<Elem = Sd::Elem>,
         Sqy: Data<Elem = Sy::Elem>,
-        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
+        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller> + 'static,
         <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output: DimExtension,
     {
         assert!(
@@ -194,13 +195,12 @@ where
     /// given a multi dimensional qurey of `M = (10, 20)` the return will be `(10, 20, 4, 5)`
     ///
     /// # panics
-    /// when `xs.shape() != ys.shape()` or when the buffer does not have the correct shape.
+    /// when `xs.shape() != ys.shape()` or when the provided buffer is too small or has the wrong shape
     pub fn interp_array_into<Sqx, Sqy, Dq>(
         &self,
         xs: &ArrayBase<Sqx, Dq>,
         ys: &ArrayBase<Sqy, Dq>,
         mut buffer: ArrayViewMut<
-            '_,
             Sd::Elem,
             <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output,
         >,
@@ -208,13 +208,34 @@ where
     where
         Sqx: Data<Elem = Sd::Elem>,
         Sqy: Data<Elem = Sy::Elem>,
-        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller>,
+        Dq: Dimension + DimAdd<<D::Smaller as Dimension>::Smaller> + 'static,
         <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output: DimExtension,
     {
         assert!(
             xs.shape() == ys.shape(),
             "`xs.shape()` and `ys.shape()` do not match"
         );
+        if TypeId::of::<Dq>() == TypeId::of::<Ix1>() {
+            // Safety: We checked that `Dq` has type `Ix1`.
+            //    Therefor the `&ArrayBase<Sq, Dq>` and `&ArrayBase<Sq, Ix1>` must be the same type.
+            let xs_1d = unsafe { cast_unchecked::<&ArrayBase<Sqx, Dq>, &ArrayBase<Sqx, Ix1>>(xs) };
+            let ys_1d = unsafe { cast_unchecked::<&ArrayBase<Sqy, Dq>, &ArrayBase<Sqy, Ix1>>(ys) };
+            // Safety: `<Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output>` reducees the dimension of `D` by two,
+            //    and adds the dimension of `Dq`.
+            //    Given that `Dq` has type `Ix1` the resulting dimension will be `D::Smaller` again.
+            //    `D` might be of type `IxDyn` In that case `IxDyn::Smaller` => `IxDyn` and also `Ix1::DimAdd<IxDyn>::Output` => `IxDyn`
+            let buffer_d = unsafe {
+                cast_unchecked::<
+                    ArrayViewMut<
+                        Sd::Elem,
+                        <Dq as DimAdd<<D::Smaller as Dimension>::Smaller>>::Output,
+                    >,
+                    ArrayViewMut<Sd::Elem, D::Smaller>,
+                >(buffer)
+            };
+            return self.interp_array_into_1d(xs_1d, ys_1d, buffer_d);
+        }
+
         for (index, &x) in xs.indexed_iter() {
             let current_dim = index.clone().into_dimension();
             let y = *ys
@@ -245,6 +266,28 @@ where
             self.strategy.interp_into(self, subview, x, y)?;
         }
         Ok(())
+    }
+
+    fn interp_array_into_1d<Sqx, Sqy>(
+        &self,
+        xs: &ArrayBase<Sqx, Ix1>,
+        ys: &ArrayBase<Sqy, Ix1>,
+        mut buffer: ArrayViewMut<'_, Sd::Elem, D::Smaller>,
+    ) -> Result<(), InterpolateError>
+    where
+        Sqx: Data<Elem = Sd::Elem>,
+        Sqy: Data<Elem = Sd::Elem>,
+    {
+        Zip::from(xs)
+            .and(ys)
+            .and(buffer.axis_iter_mut(Axis(0)))
+            .fold_while(Ok(()), |_, &x, &y, buf| {
+                match self.strategy.interp_into(self, buf, x, y) {
+                    Ok(_) => ndarray::FoldWhile::Continue(Ok(())),
+                    Err(e) => ndarray::FoldWhile::Done(Err(e)),
+                }
+            })
+            .into_inner()
     }
 
     /// the required shape of the buffer when calling [`interp_array_into`]

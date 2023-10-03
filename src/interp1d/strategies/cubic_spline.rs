@@ -294,12 +294,12 @@ where
         let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());
 
         let t = (x - x_left) / (x_right - x_left);
-        Zip::from(target)
-            .and(data_left)
+        Zip::from(data_left)
             .and(data_right)
             .and(a_left)
             .and(b_left)
-            .for_each(|y, &y_left, &y_right, &a_left, &b_left| {
+            .and(target)
+            .for_each(|&y_left, &y_right, &a_left, &b_left, y| {
                 *y = (one - t) * y_left
                     + t * y_right
                     + t * (one - t) * (a_left * (one - t) + b_left * t);
