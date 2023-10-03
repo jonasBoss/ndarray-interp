@@ -13,6 +13,8 @@
 //! see the `custom_strategy.rs` example.
 //!
 
+use std::mem::ManuallyDrop;
+
 use thiserror::Error;
 
 mod dim_extensions;
@@ -42,4 +44,15 @@ pub enum BuilderError {
 pub enum InterpolateError {
     #[error("{0}")]
     OutOfBounds(String),
+}
+
+/// cast `a` from type `A` to type `B` without any safety checks
+///
+/// ## Safety
+///  - The caller must guarantee that `A` and `B` are the same types
+///  - Types should be annotated to ensure type inference does not break
+/// the contract by accident
+unsafe fn cast_unchecked<A, B>(a: A) -> B {
+    let ptr = &*ManuallyDrop::new(a) as *const A as *const B;
+    unsafe { ptr.read() }
 }

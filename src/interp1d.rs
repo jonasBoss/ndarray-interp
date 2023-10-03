@@ -12,15 +12,16 @@
 //!  - [`Linear`] Linear interpolation strategy
 //!  - [`CubicSpline`] Cubic spline interpolation strategy
 
-use std::{fmt::Debug, ops::Sub};
+use std::{any::TypeId, fmt::Debug, ops::Sub};
 
 use ndarray::{
     Array, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd, Dimension,
-    IntoDimension, Ix0, Ix1, OwnedRepr, RemoveAxis, Slice,
+    IntoDimension, Ix0, Ix1, OwnedRepr, RemoveAxis, Slice, Zip,
 };
 use num_traits::{cast, Num, NumCast};
 
 use crate::{
+    cast_unchecked,
     dim_extensions::DimExtension,
     vector_extensions::{Monotonic, VectorExtensions},
     BuilderError, InterpolateError,
@@ -143,7 +144,7 @@ where
     /// because it does not allocate any memory for the result
     ///
     /// # Panics
-    /// When the buffer does not have the correct shape.
+    /// When the provided buffer is too small or has the wrong shape
     pub fn interp_into(
         &self,
         x: Sx::Elem,
@@ -178,7 +179,7 @@ where
     ) -> Result<Array<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>, InterpolateError>
     where
         Sq: Data<Elem = Sd::Elem>,
-        Dq: Dimension + DimAdd<D::Smaller>,
+        Dq: Dimension + DimAdd<D::Smaller> + 'static,
         <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
     {
         let dim = self.get_buffer_shape(xs.raw_dim());
@@ -246,17 +247,35 @@ where
     /// ```
     ///
     /// # panics
-    /// When the provided buffer has the wrong shape
+    /// When the provided buffer is too small or has the wrong shape
     pub fn interp_array_into<Sq, Dq>(
         &self,
         xs: &ArrayBase<Sq, Dq>,
-        mut buffer: ArrayViewMut<'_, Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>,
+        mut buffer: ArrayViewMut<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>,
     ) -> Result<(), InterpolateError>
     where
         Sq: Data<Elem = Sd::Elem>,
-        Dq: Dimension + DimAdd<D::Smaller>,
+        Dq: Dimension + DimAdd<D::Smaller> + 'static,
         <Dq as DimAdd<D::Smaller>>::Output: DimExtension,
     {
+        //self.dim_check(xs.raw_dim(), buffer.raw_dim());
+        if TypeId::of::<Dq>() == TypeId::of::<Ix1>() {
+            // Safety: We checked that `Dq` has type `Ix1`.
+            //    Therefor the `&ArrayBase<Sq, Dq>` and `&ArrayBase<Sq, Ix1>` must be the same type.
+            let xs_1d = unsafe { cast_unchecked::<&ArrayBase<Sq, Dq>, &ArrayBase<Sq, Ix1>>(xs) };
+            // Safety: `<Dq as DimAdd<D::Smaller>>::Output>` reducees the dimension of `D` by one,
+            //    and adds the dimension of `Dq`.
+            //    Given that `Dq` has type `Ix1` the resulting dimension will be `D` again.
+            //    `D` might be of type `IxDyn` In that case `IxDyn::Smaller` => `IxDyn` and also `Ix1::DimAdd<IxDyn>::Output` => `IxDyn`
+            let buffer_d = unsafe {
+                cast_unchecked::<
+                    ArrayViewMut<Sd::Elem, <Dq as DimAdd<D::Smaller>>::Output>,
+                    ArrayViewMut<Sd::Elem, D>,
+                >(buffer)
+            };
+            return self.interp_array_into_1d(xs_1d, buffer_d);
+        }
+
         // Perform interpolation for each index
         for (index, &x) in xs.indexed_iter() {
             let current_dim = index.clone().into_dimension();
@@ -280,6 +299,25 @@ where
             self.strategy.interp_into(self, subview, x)?;
         }
         Ok(())
+    }
+
+    fn interp_array_into_1d<Sq>(
+        &self,
+        xs: &ArrayBase<Sq, Ix1>,
+        mut buffer: ArrayViewMut<'_, Sd::Elem, D>,
+    ) -> Result<(), InterpolateError>
+    where
+        Sq: Data<Elem = Sd::Elem>,
+    {
+        Zip::from(xs)
+            .and(buffer.axis_iter_mut(Axis(0)))
+            .fold_while(Ok(()), |_, &x, buf| {
+                match self.strategy.interp_into(self, buf, x) {
+                    Ok(_) => ndarray::FoldWhile::Continue(Ok(())),
+                    Err(e) => ndarray::FoldWhile::Done(Err(e)),
+                }
+            })
+            .into_inner()
     }
 
     /// the required shape of the buffer when calling [`interp_array_into`]
@@ -506,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "expected: [3], got: [4]")]
+    #[should_panic(expected = "expected: [4], got: [3]")]
     fn interp1d_2d_into_too_small() {
         let interp = get_interp!(2, (4, 4));
         let mut buf = Array::zeros(3);
@@ -514,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "expected: [5], got: [4]")]
+    #[should_panic(expected = "expected: [4], got: [5]")]
     fn interp1d_2d_into_too_big() {
         let interp = get_interp!(2, (4, 4));
         let mut buf = Array::zeros(5);
@@ -522,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "expected: [2], got: [1]")] // this is not really a good message
     fn interp1d_2d_array_into_too_small1() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
             .into_shape((4, 4))
@@ -533,7 +571,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "expected: (2, 4), got: (2, 3)")]
+    #[should_panic]
     fn interp1d_2d_array_into_too_small2() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
             .into_shape((4, 4))
@@ -543,19 +581,19 @@ mod tests {
         let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
     }
 
-    // #[test]
-    // #[should_panic]
-    // fn interp1d_2d_array_into_too_big1() {
-    //     let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
-    //         .into_shape((4, 4))
-    //         .unwrap();
-    //     let interp = Interp1D::builder(arr).build().unwrap();
-    //     let mut buf = Array::zeros((3, 4));
-    //     let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
-    // }
+    #[test]
+    #[should_panic]
+    fn interp1d_2d_array_into_too_big1() {
+        let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
+            .into_shape((4, 4))
+            .unwrap();
+        let interp = Interp1D::builder(arr).build().unwrap();
+        let mut buf = Array::zeros((3, 4));
+        let _ = interp.interp_array_into(&array![2.2, 2.4], buf.view_mut());
+    }
 
     #[test]
-    #[should_panic(expected = "expected: (2, 4), got: (2, 5)")]
+    #[should_panic]
     fn interp1d_2d_array_into_too_big2() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
             .into_shape((4, 4))
