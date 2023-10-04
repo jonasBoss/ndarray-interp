@@ -14,8 +14,8 @@
 use std::{any::TypeId, fmt::Debug, ops::Sub};
 
 use ndarray::{
-    Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, AxisDescription, Data, DimAdd,
-    Dimension, IntoDimension, Ix0, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice, Zip,
+    Array, Array1, ArrayBase, ArrayView, ArrayViewMut, ArrayViewMut1, Axis, AxisDescription, Data,
+    DimAdd, Dimension, IntoDimension, Ix1, Ix2, OwnedRepr, RemoveAxis, Slice, Zip,
 };
 use num_traits::{cast, Num, NumCast};
 
@@ -89,11 +89,11 @@ where
     /// # assert_eq!(result, expected);
     /// ```
     pub fn interp_scalar(&self, x: Sx::Elem, y: Sy::Elem) -> Result<Sd::Elem, InterpolateError> {
-        let mut buffer = Array::zeros(Ix0());
+        let mut buffer = [cast(0.0).unwrap_or_else(|| unimplemented!())];
+        let buf_view = ArrayViewMut1::from(buffer.as_mut_slice()).remove_axis(Axis(0));
         self.strategy
-            .interp_into(self, buffer.view_mut(), x, y)
-            .map(|_| buffer.first().unwrap_or_else(|| unreachable!()))
-            .copied()
+            .interp_into(self, buf_view, x, y)
+            .map(|_| buffer[0])
     }
 }
 
