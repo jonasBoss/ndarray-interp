@@ -1,3 +1,7 @@
+# 0.4.1
+ - major performance improvement for `interp_scalar()` methods ~-50%
+ - keywords and categorys in crate metadata
+
 # 0.4.0
  - performance improvement for `Interp2D` (`Interp2D::index_point()` is now much faster) -50% for most interpolation methods
  - runtime specialization for `interp_array` methods when query dimension is `Ix1` ~-20% improvement
