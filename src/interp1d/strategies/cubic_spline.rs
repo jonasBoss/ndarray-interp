@@ -28,7 +28,7 @@ const AX0: Axis = Axis(0);
 /// let x = array![-1.0, 0.0, 3.0];
 /// let query = Array::linspace(-1.0, 3.0, 10);
 /// let interpolator = Interp1DBuilder::new(y)
-///     .strategy(CubicSpline)
+///     .strategy(CubicSpline::new())
 ///     .x(x)
 ///     .build().unwrap();
 ///
@@ -48,7 +48,9 @@ const AX0: Axis = Axis(0);
 /// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
 /// ```
 #[derive(Debug)]
-pub struct CubicSpline;
+pub struct CubicSpline {
+    extrapolate: bool,
+}
 impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline
 where
     Sd: Data,
@@ -77,8 +79,9 @@ where
     where
         Sx2: Data<Elem = Sd::Elem>,
     {
+        let Self { extrapolate } = self;
         let (a, b) = self.calc_coefficients(x, data);
-        Ok(CubicSplineStrategy { a, b })
+        Ok(CubicSplineStrategy { a, b, extrapolate })
     }
 }
 
@@ -246,8 +249,15 @@ impl CubicSpline {
         (c_a, c_b)
     }
 
+    /// create a cubic-spline interpolation stratgy
     pub fn new() -> Self {
-        Self
+        Self { extrapolate: false }
+    }
+
+    /// does the strategy extrapolate? Default is `false`
+    pub fn extrapolate(mut self, extrapolate: bool) -> Self {
+        self.extrapolate = extrapolate;
+        self
     }
 }
 
@@ -265,6 +275,7 @@ where
 {
     a: Array<Sd::Elem, D>,
     b: Array<Sd::Elem, D>,
+    extrapolate: bool,
 }
 
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
@@ -280,7 +291,7 @@ where
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-        if !interp.is_in_range(x) {
+        if !self.extrapolate && !interp.is_in_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:#?} is not in range",
             )));

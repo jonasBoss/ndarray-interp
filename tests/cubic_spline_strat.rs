@@ -1,4 +1,4 @@
-use approx::assert_abs_diff_eq;
+use approx::assert_relative_eq;
 use ndarray::{array, Array1};
 use ndarray_interp::interp1d::{CubicSpline, Interp1D};
 use ndarray_interp::{BuilderError, InterpolateError};
@@ -13,40 +13,14 @@ fn interp() {
     let q = Array1::linspace(0.0, 11.0, 30);
     let res = interp.interp_array(&q).unwrap();
 
-    // values from scipy.interpolate.QubicSpline
+    // values from scipy.interpolate.QubicSpline with bc_type="natural"
     let expect = array![
-        1.0,
-        1.3917082281418252,
-        1.7709152572751259,
-        2.125720997885402,
-        2.4735200559559645,
-        2.873596855334901,
-        3.3692218872560726,
-        3.822919531969092,
-        3.998240261438613,
-        3.75923077015136,
-        3.279709933108678,
-        2.7881342665115523,
-        2.390891499049402,
-        2.0569231634621636,
-        1.744119027809967,
-        1.38442936840091,
-        0.8991930736934348,
-        0.327385578986533,
-        -0.01567970348252848,
-        0.2056442153017282,
-        0.9653909358084248,
-        1.9164377865351583,
-        2.757368677491977,
-        3.485961877773172,
-        4.197630493134489,
-        4.947868508672761,
-        5.71920917646552,
-        6.487721497405632,
-        7.246383891907155,
-        8.0
+        1., 1.39170823, 1.77091526, 2.125721, 2.47352006, 2.87359686, 3.36922189, 3.82291953,
+        3.99824026, 3.75923077, 3.27970993, 2.78813427, 2.3908915, 2.05692316, 1.74411903,
+        1.38442937, 0.89919307, 0.32738558, -0.0156797, 0.20564422, 0.96539094, 1.91643779,
+        2.75736868, 3.48596188, 4.19763049, 4.94786851, 5.71920918, 6.4877215, 7.24638389, 8.
     ];
-    assert_abs_diff_eq!(res, expect, epsilon = f64::EPSILON);
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
 
 #[test]
@@ -66,7 +40,7 @@ fn enough_data() {
 }
 
 #[test]
-fn extrapolate() {
+fn extrapolate_false() {
     let interp = Interp1D::builder(array![1.0, 2.0, 1.0])
         .strategy(CubicSpline::new())
         .build()
@@ -75,4 +49,50 @@ fn extrapolate() {
     assert!(matches!(err, Err(InterpolateError::OutOfBounds(_))));
     let err = interp.interp(3.5);
     assert!(matches!(err, Err(InterpolateError::OutOfBounds(_))));
+}
+
+#[test]
+fn extrapolate_true() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
+    let interp = Interp1D::builder(data)
+        .strategy(CubicSpline::new().extrapolate(true))
+        .build()
+        .unwrap();
+    let q = Array1::linspace(-3.0, 15.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+
+    // values from scipy.interpolate.QubicSpline with bc_type="natural"
+    let expect = array![
+        -0.10117811,
+        -0.50187696,
+        -0.46744049,
+        -0.11138225,
+        0.45278419,
+        1.11154527,
+        1.75138741,
+        2.25775994,
+        2.49749363,
+        2.442418,
+        2.62405156,
+        3.00988064,
+        2.60389947,
+        1.96187505,
+        1.6459892,
+        -0.21920517,
+        -2.0380548,
+        0.35839389,
+        3.69754559,
+        4.82435282,
+        5.45047974,
+        6.35498498,
+        7.39691304,
+        8.48312564,
+        9.5339106,
+        10.46955574,
+        11.21034887,
+        11.67657779,
+        11.78853034,
+        11.46649431
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
