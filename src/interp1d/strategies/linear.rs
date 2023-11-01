@@ -75,7 +75,7 @@ impl Linear {
         Self { extrapolate: false }
     }
 
-    /// set the extrapolate property, default is `false`
+    /// does the strategy extrapolate? Default is `false`
     pub fn extrapolate(mut self, extrapolate: bool) -> Self {
         self.extrapolate = extrapolate;
         self
