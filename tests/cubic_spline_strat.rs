@@ -1,6 +1,6 @@
 use approx::assert_relative_eq;
 use ndarray::{array, Array1};
-use ndarray_interp::interp1d::{CubicSpline, Interp1D};
+use ndarray_interp::interp1d::{CubicSpline, Interp1D, BoundaryCondition};
 use ndarray_interp::{BuilderError, InterpolateError};
 
 #[test]
@@ -61,6 +61,53 @@ fn extrapolate_true() {
     let q = Array1::linspace(-3.0, 15.0, 30);
     let res = interp.interp_array(&q).unwrap();
 
+    // values from scipy.interpolate.QubicSpline with bc_type="natural"
+    let expect = array![
+        -0.10117811,
+        -0.50187696,
+        -0.46744049,
+        -0.11138225,
+        0.45278419,
+        1.11154527,
+        1.75138741,
+        2.25775994,
+        2.49749363,
+        2.442418,
+        2.62405156,
+        3.00988064,
+        2.60389947,
+        1.96187505,
+        1.6459892,
+        -0.21920517,
+        -2.0380548,
+        0.35839389,
+        3.69754559,
+        4.82435282,
+        5.45047974,
+        6.35498498,
+        7.39691304,
+        8.48312564,
+        9.5339106,
+        10.46955574,
+        11.21034887,
+        11.67657779,
+        11.78853034,
+        11.46649431
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+#[ignore]
+fn extrapolate_not_a_knot() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
+    let interp = Interp1D::builder(data)
+        .strategy(CubicSpline::new().extrapolate(true).boundary(BoundaryCondition::NotAKnot))
+        .build()
+        .unwrap();
+    let q = Array1::linspace(-1.0, 13.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+    println!("{res:?}");
     // values from scipy.interpolate.QubicSpline with bc_type="natural"
     let expect = array![
         -0.10117811,
