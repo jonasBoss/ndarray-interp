@@ -30,7 +30,7 @@ use crate::{
 mod aliases;
 mod strategies;
 pub use aliases::*;
-pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
+pub use strategies::{CubicSpline, BoundaryCondition, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
 
 /// One dimensional interpolator
 #[derive(Debug)]
