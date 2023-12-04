@@ -50,7 +50,40 @@ const AX0: Axis = Axis(0);
 #[derive(Debug)]
 pub struct CubicSpline {
     extrapolate: bool,
+    boundary: BoundaryCondition,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BoundaryCondition {
+    Periodic,
+    Mixed {
+        left: BoundaryType,
+        right: BoundaryType,
+    },
+}
+
+impl BoundaryCondition {
+    pub const Natural: BoundaryCondition = BoundaryCondition::Mixed {
+        left: BoundaryType::Natural,
+        right: BoundaryType::Natural,
+    };
+    pub const NotAKnot: BoundaryCondition = BoundaryCondition::Mixed {
+        left: BoundaryType::NotAKnot,
+        right: BoundaryType::NotAKnot,
+    };
+    pub const Clamped: BoundaryCondition = BoundaryCondition::Mixed {
+        left: BoundaryType::Clamped,
+        right: BoundaryType::Clamped,
+    };
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum BoundaryType {
+    Natural,
+    NotAKnot,
+    Clamped,
+}
+
 impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline
 where
     Sd: Data,
@@ -79,7 +112,10 @@ where
     where
         Sx2: Data<Elem = Sd::Elem>,
     {
-        let Self { extrapolate } = self;
+        let Self {
+            extrapolate,
+            ref boundary,
+        } = self;
         let (a, b) = self.calc_coefficients(x, data);
         Ok(CubicSplineStrategy { a, b, extrapolate })
     }
@@ -107,8 +143,6 @@ impl CubicSpline {
     {
         let dim = data.raw_dim();
         let len = dim[0];
-        let mut a_b_dim = data.raw_dim();
-        a_b_dim[0] -= 1;
 
         /*
          * Calculate the coefficients c_a and c_b for the cubic spline the method is outlined on
@@ -133,26 +167,13 @@ impl CubicSpline {
             .and(a_low.slice_mut(s![1..-1]))
             .and(x.windows(3))
             .for_each(|a_up, a_mid, a_low, x| {
-                let x_left = x[0];
-                let x_mid = x[1];
-                let x_right = x[2];
+                let dxn = x[2] - x[1];
+                let dxn_1 = x[1] - x[0];
 
-                *a_up = one / (x_right - x_mid);
-                *a_mid = two / (x_mid - x_left) + two / (x_right - x_mid);
-                *a_low = one / (x_mid - x_left);
+                *a_up = dxn_1;
+                *a_mid = two * (dxn + dxn_1);
+                *a_low = dxn;
             });
-
-        let x_0 = x[0];
-        let x_1 = x[1];
-
-        a_up[0] = one / (x_1 - x_0);
-        a_mid[0] = two / (x_1 - x_0);
-
-        // x_n and xn-1
-        let x_n = x[len - 1];
-        let x_n1 = x[len - 2];
-        a_mid[len - 1] = two / (x_n - x_n1);
-        a_low[len - 1] = one / (x_n - x_n1);
 
         // RHS vector
         let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
@@ -162,41 +183,98 @@ impl CubicSpline {
             let y_left = data.index_axis(AX0, i - 1);
             let y_mid = data.index_axis(AX0, i);
             let y_right = data.index_axis(AX0, i + 1);
-            let x_left = x[i - 1];
-            let x_mid = x[i];
-            let x_right = x[i + 1];
+
+            let dxn = x[i + 1] - x[i]; // dx(n)
+            let dxn_1 = x[i] - x[i - 1]; // dx(n-1)
+
             Zip::from(y_left).and(y_mid).and(y_right).map_assign_into(
                 rhs,
                 |&y_left, &y_mid, &y_right| {
-                    three
-                        * ((y_mid - y_left) / (x_mid - x_left).pow(two)
-                            + (y_right - y_mid) / (x_right - x_mid).pow(two))
+                    three * (dxn * (y_mid - y_left) / dxn_1 + dxn_1 * (y_right - y_mid) / dxn)
                 },
             );
         }
 
-        let rhs_0 = rhs.index_axis_mut(AX0, 0);
-        let data_0 = data.index_axis(AX0, 0);
-        let data_1 = data.index_axis(AX0, 1);
-        Zip::from(rhs_0)
-            .and(data_0)
-            .and(data_1)
-            .for_each(|rhs_0, &y_0, &y_1| {
-                *rhs_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
-            });
+        // apply boundary conditions
+        match self.boundary {
+            BoundaryCondition::Periodic => todo!(),
+            BoundaryCondition::Natural => {
+                let x_0 = x[0];
+                let x_1 = x[1];
 
-        let rhs_n = rhs.index_axis_mut(AX0, len - 1);
-        let data_n = data.index_axis(AX0, len - 1);
-        let data_n1 = data.index_axis(AX0, len - 2);
-        Zip::from(rhs_n)
-            .and(data_n)
-            .and(data_n1)
-            .for_each(|rhs_n, &y_n, &y_n1| {
-                *rhs_n = three * (y_n - y_n1) / (x_n - x_n1).pow(two);
-            });
+                a_up[0] = one / (x_1 - x_0);
+                a_mid[0] = two / (x_1 - x_0);
 
-        // now solving With Thomas algorithm
+                // x_n and xn-1
+                let x_n = x[len - 1];
+                let x_n1 = x[len - 2];
+                a_mid[len - 1] = two / (x_n - x_n1);
+                a_low[len - 1] = one / (x_n - x_n1);
 
+                let rhs_0 = rhs.index_axis_mut(AX0, 0);
+                let data_0 = data.index_axis(AX0, 0);
+                let data_1 = data.index_axis(AX0, 1);
+                Zip::from(rhs_0)
+                    .and(data_0)
+                    .and(data_1)
+                    .for_each(|rhs_0, &y_0, &y_1| {
+                        *rhs_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
+                    });
+
+                let rhs_n = rhs.index_axis_mut(AX0, len - 1);
+                let data_n = data.index_axis(AX0, len - 1);
+                let data_n1 = data.index_axis(AX0, len - 2);
+                Zip::from(rhs_n)
+                    .and(data_n)
+                    .and(data_n1)
+                    .for_each(|rhs_n, &y_n, &y_n1| {
+                        *rhs_n = three * (y_n - y_n1) / (x_n - x_n1).pow(two);
+                    });
+            }
+            BoundaryCondition::NotAKnot => {
+                if len == 3 {
+                    // We handle this case by constructing a parabola passing through given points.
+                    todo!()
+                } else {
+                    let dx0 = x[1] - x[0];
+                    let dx1 = x[2] - x[1];
+                    a_mid[0] = dx1;
+                    let d = x[2] - x[0];
+                    a_up[1] = d;
+                    let tmp1 = (dx0 + two * d) * dx1;
+                    Zip::from(rhs.index_axis_mut(AX0, 0))
+                        .and(data.index_axis(AX0, 0))
+                        .and(data.index_axis(AX0, 1))
+                        .and(data.index_axis(AX0, 2))
+                        .for_each(|b, &y0, &y1, &y2| {
+                            *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1) / d;
+                        });
+
+                    let dx_1 = x[len - 1] - x[len - 2];
+                    let dx_2 = x[len - 2] - x[len - 3];
+                    a_mid[len - 1] = dx_1;
+                    let d = x[len - 1] - x[len - 3];
+                    a_low[len - 2] = d;
+                    let tmp1 = (two * d + dx_1) * dx_2;
+                    Zip::from(rhs.index_axis_mut(AX0, len - 1))
+                        .and(data.index_axis(AX0, len - 1))
+                        .and(data.index_axis(AX0, len - 2))
+                        .and(data.index_axis(AX0, len - 3))
+                        .for_each(|b, &y_1, &y_2, &y_3| {
+                            *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2 + tmp1 * (y_1 - y_2)/ dx_1)
+                                / d;
+                        });
+                }
+            }
+            BoundaryCondition::Mixed { left, right } => todo!(),
+        }
+
+        println!("{a_up:?}");
+        println!("{a_mid:?}");
+        println!("{a_low:?}");
+        println!("{rhs:?}");
+
+        // now solving with Thomas algorithm
         let mut rhs_left = rhs.index_axis(AX0, 0).into_owned();
         for i in 1..len {
             let w = a_low[i] / a_mid[i - 1];
@@ -231,6 +309,8 @@ impl CubicSpline {
                 })
         }
 
+        let mut a_b_dim = data.raw_dim();
+        a_b_dim[0] -= 1;
         let mut c_a = Array::zeros(a_b_dim.clone());
         let mut c_b = Array::zeros(a_b_dim);
         for index in 0..len - 1 {
@@ -251,12 +331,21 @@ impl CubicSpline {
 
     /// create a cubic-spline interpolation stratgy
     pub fn new() -> Self {
-        Self { extrapolate: false }
+        Self {
+            extrapolate: false,
+            boundary: BoundaryCondition::Natural,
+        }
     }
 
     /// does the strategy extrapolate? Default is `false`
     pub fn extrapolate(mut self, extrapolate: bool) -> Self {
         self.extrapolate = extrapolate;
+        self
+    }
+
+    /// set the boundary condition. default is [`BoundaryCondition::Natural`]
+    pub fn boundary(mut self, boundary: BoundaryCondition) -> Self {
+        self.boundary = boundary;
         self
     }
 }
