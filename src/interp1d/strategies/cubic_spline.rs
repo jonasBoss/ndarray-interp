@@ -95,6 +95,9 @@ pub enum BoundaryCondition<T, D: Dimension> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum RowBoundarys<T> {
     Periodic,
+    Natural,
+    NotAKnot,
+    Clamped,
     Mixed {
         left: SingleBoundary<T>,
         right: SingleBoundary<T>,
@@ -102,18 +105,24 @@ pub enum RowBoundarys<T> {
 }
 
 impl<T: SplineNum> RowBoundarys<T> {
-    pub const Natural: RowBoundarys<T> = RowBoundarys::Mixed {
-        left: SingleBoundary::Natural,
-        right: SingleBoundary::Natural,
-    };
-    pub const NotAKnot: RowBoundarys<T> = RowBoundarys::Mixed {
-        left: SingleBoundary::NotAKnot,
-        right: SingleBoundary::NotAKnot,
-    };
-    pub const Clamped: RowBoundarys<T> = RowBoundarys::Mixed {
-        left: SingleBoundary::Clamped,
-        right: SingleBoundary::Clamped,
-    };
+    fn specialize(self) -> Self {
+        use SingleBoundary::*;
+        match self {
+            RowBoundarys::Natural => Self::Mixed {
+                left: Natural,
+                right: Natural,
+            },
+            RowBoundarys::NotAKnot => Self::Mixed {
+                left: NotAKnot,
+                right: NotAKnot,
+            },
+            RowBoundarys::Clamped => Self::Mixed {
+                left: Clamped,
+                right: Clamped,
+            },
+            _ => self,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -126,17 +135,12 @@ pub enum SingleBoundary<T> {
 }
 
 impl<T: SplineNum> SingleBoundary<T> {
-    fn specialize(&mut self) {
+    fn specialize(self) -> Self {
+        use SingleBoundary::*;
         match self {
-            SingleBoundary::NotAKnot => (),
-            SingleBoundary::Natural => {
-                *self = Self::SecondDeriv(cast(0.0).unwrap_or_else(|| unimplemented!()))
-            }
-            SingleBoundary::Clamped => {
-                *self = Self::FirstDeriv(cast(0.0).unwrap_or_else(|| unimplemented!()))
-            }
-            SingleBoundary::FirstDeriv(_) => (),
-            SingleBoundary::SecondDeriv(_) => (),
+            SingleBoundary::Natural => SecondDeriv(cast(0.0).unwrap_or_else(|| unimplemented!())),
+            SingleBoundary::Clamped => FirstDeriv(cast(0.0).unwrap_or_else(|| unimplemented!())),
+            _ => self,
         }
     }
 }
@@ -173,6 +177,7 @@ where
     D: Dimension + RemoveAxis,
     T: SplineNum,
 {
+    /// Calculate the coefficients `a` and `b`
     fn calc_coefficients<Sd, Sx>(
         self,
         x: &ArrayBase<Sx, Ix1>,
@@ -187,9 +192,9 @@ where
 
         let k: Array<T, D> = match self.boundary {
             BoundaryCondition::Periodic => todo!(),
-            BoundaryCondition::Natural => Self::calc_k(x, data, RowBoundarys::Natural),
-            BoundaryCondition::Clamped => Self::calc_k(x, data, RowBoundarys::Clamped),
-            BoundaryCondition::NotAKnot => Self::calc_k(x, data, RowBoundarys::NotAKnot),
+            BoundaryCondition::Natural => Self::solve_for_k(x, data, RowBoundarys::Natural),
+            BoundaryCondition::Clamped => Self::solve_for_k(x, data, RowBoundarys::Clamped),
+            BoundaryCondition::NotAKnot => Self::solve_for_k(x, data, RowBoundarys::NotAKnot),
             BoundaryCondition::Individual(_bounds) => todo!(),
         };
 
@@ -213,7 +218,11 @@ where
         (c_a, c_b)
     }
 
-    fn calc_k<Sd, Sx, _D>(
+    /// solves the linear equation `A * k = rhs` with the [`RowBoundarys`] used for
+    /// each row in the data
+    ///  
+    /// **returns** k
+    fn solve_for_k<Sd, Sx, _D>(
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
         boundary: RowBoundarys<T>,
@@ -276,8 +285,11 @@ where
         }
 
         // apply boundary conditions
-        match boundary {
+        match boundary.specialize() {
             RowBoundarys::Periodic => todo!(),
+            RowBoundarys::Clamped => unreachable!(),
+            RowBoundarys::Natural => unreachable!(),
+            RowBoundarys::NotAKnot => unreachable!(),
             RowBoundarys::Mixed {
                 left: SingleBoundary::Natural,
                 right: SingleBoundary::Natural,
