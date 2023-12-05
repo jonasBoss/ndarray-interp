@@ -83,40 +83,100 @@ pub struct CubicSpline<T, D: Dimension> {
     boundary: BoundaryCondition<T, D>,
 }
 
+/// Boundary conditions for the whole dataset
+/// 
+/// The boundary condition is structured in three hirarchic enum's:
+///  - This: The toplevel boundary applys to the whole dataset
+///  - [`RowBoundary`] applys to a single row in the dataset
+///  - [`SingleBoundary`] applys to an individual boundary of a single row
+/// 
+/// the default is the [`NotAKnot`](BoundaryCondition::NotAKnot) boundary in each level
+/// 
+/// ## Example
+/// In a complex case all boundaries can be set individually:
+/// ``` rust
+/// # use ndarray_interp::*;
+/// # use ndarray_interp::interp1d::*;
+/// # use ndarray::*;
+/// # use approx::*;
+/// 
+/// let y = array![
+///     [0.5, 1.0],
+///     [0.0, 1.5],
+///     [3.0, 0.5],
+/// ];
+/// let x = array![-1.0, 0.0, 3.0];
+/// 
+/// // first data column: natural
+/// // second data column top: NotAKnot 
+/// // second data column bottom: first derivative == 0.5
+/// let boundaries = array![
+///     [
+///         RowBoundary::Natural,
+///         RowBoundary::Mixed { left: SingleBoundary::NotAKnot, right: SingleBoundary::FirstDeriv(0.5)}
+///     ],
+/// ];
+/// let strat = CubicSpline::new().boundary(BoundaryCondition::Individual(boundaries));
+/// let interpolator = Interp1DBuilder::new(y)
+///     .x(x)
+///     .strategy(strat)
+///     .build().unwrap();
+/// 
+/// ``` 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BoundaryCondition<T, D: Dimension> {
-    Periodic,
-    Natural,
-    Clamped,
+    /// Not a knot boundary. The first and second segment at a curve end are the same polynomial.
     NotAKnot,
-    Individual(Array<RowBoundarys<T>, D>),
+    /// Natural boundary. The second derivative at the curve end is 0
+    Natural,
+    /// Clamped boundary. The first derivative at the curve end is 0
+    Clamped,
+    /// Periodic spline.
+    /// The interpolated functions is assumed to be periodic.
+    /// The first and last element in the data must be equal.
+    Periodic,
+    /// Set individual boundary conditions for each row in the data 
+    /// and/or individual conditions for the left and right boundary
+    Individual(Array<RowBoundary<T>, D>),
 }
 
+impl<T, D: Dimension> Default for BoundaryCondition<T, D> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+/// Boundary condition for a single data row
 #[derive(Debug, PartialEq, Eq)]
-pub enum RowBoundarys<T> {
-    Periodic,
-    Natural,
+pub enum RowBoundary<T> {
+    /// ![`BoundaryCondition::NotAKnot`]
     NotAKnot,
+    /// ![`BoundaryCondition::Natural`]
+    Natural,
+    /// ![`BoundaryCondition::Clamped`]
     Clamped,
+    /// ![`BoundaryCondition::Periodic`]
+    Periodic,
+    /// Set individual boundary conditions at the left and right end of the curve
     Mixed {
         left: SingleBoundary<T>,
         right: SingleBoundary<T>,
     },
 }
 
-impl<T: SplineNum> RowBoundarys<T> {
+impl<T: SplineNum> RowBoundary<T> {
     fn specialize(self) -> Self {
         use SingleBoundary::*;
         match self {
-            RowBoundarys::Natural => Self::Mixed {
+            RowBoundary::Natural => Self::Mixed {
                 left: Natural,
                 right: Natural,
             },
-            RowBoundarys::NotAKnot => Self::Mixed {
+            RowBoundary::NotAKnot => Self::Mixed {
                 left: NotAKnot,
                 right: NotAKnot,
             },
-            RowBoundarys::Clamped => Self::Mixed {
+            RowBoundary::Clamped => Self::Mixed {
                 left: Clamped,
                 right: Clamped,
             },
@@ -125,12 +185,26 @@ impl<T: SplineNum> RowBoundarys<T> {
     }
 }
 
+impl<T: SplineNum> Default for RowBoundary<T> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+/// Boundary condition for a single boundary (one side of one data row)
 #[derive(Debug, PartialEq, Eq)]
 pub enum SingleBoundary<T> {
+    /// ![`BoundaryCondition::NotAKnot`]
     NotAKnot,
+    /// This ist the same as `SingleBoundary::SecondDeriv(0.0)`
+    /// ![`BoundaryCondition::Natural`]
     Natural,
+    /// This ist the same as `SingleBoundary::FirstDeriv(0.0)`
+    /// ![`BoundaryCondition::Clamped`]
     Clamped,
+    /// Set a value for the first derivative at the curve end
     FirstDeriv(T),
+    /// Set a value for the second derivative at the curve end
     SecondDeriv(T),
 }
 
@@ -142,6 +216,12 @@ impl<T: SplineNum> SingleBoundary<T> {
             SingleBoundary::Clamped => FirstDeriv(cast(0.0).unwrap_or_else(|| unimplemented!())),
             _ => self,
         }
+    }
+}
+
+impl<T: SplineNum> Default for SingleBoundary<T>{
+    fn default() -> Self {
+        Self::NotAKnot
     }
 }
 
@@ -192,9 +272,9 @@ where
 
         let k: Array<T, D> = match self.boundary {
             BoundaryCondition::Periodic => todo!(),
-            BoundaryCondition::Natural => Self::solve_for_k(x, data, RowBoundarys::Natural),
-            BoundaryCondition::Clamped => Self::solve_for_k(x, data, RowBoundarys::Clamped),
-            BoundaryCondition::NotAKnot => Self::solve_for_k(x, data, RowBoundarys::NotAKnot),
+            BoundaryCondition::Natural => Self::solve_for_k(x, data, RowBoundary::Natural),
+            BoundaryCondition::Clamped => Self::solve_for_k(x, data, RowBoundary::Clamped),
+            BoundaryCondition::NotAKnot => Self::solve_for_k(x, data, RowBoundary::NotAKnot),
             BoundaryCondition::Individual(_bounds) => todo!(),
         };
 
@@ -218,14 +298,14 @@ where
         (c_a, c_b)
     }
 
-    /// solves the linear equation `A * k = rhs` with the [`RowBoundarys`] used for
+    /// solves the linear equation `A * k = rhs` with the [`RowBoundary`] used for
     /// each row in the data
     ///  
     /// **returns** k
     fn solve_for_k<Sd, Sx, _D>(
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
-        boundary: RowBoundarys<T>,
+        boundary: RowBoundary<T>,
     ) -> Array<T, _D>
     where
         _D: Dimension + RemoveAxis,
@@ -286,11 +366,11 @@ where
 
         // apply boundary conditions
         match boundary.specialize() {
-            RowBoundarys::Periodic => todo!(),
-            RowBoundarys::Clamped => unreachable!(),
-            RowBoundarys::Natural => unreachable!(),
-            RowBoundarys::NotAKnot => unreachable!(),
-            RowBoundarys::Mixed {
+            RowBoundary::Periodic => todo!(),
+            RowBoundary::Clamped => unreachable!(),
+            RowBoundary::Natural => unreachable!(),
+            RowBoundary::NotAKnot => unreachable!(),
+            RowBoundary::Mixed {
                 left: SingleBoundary::Natural,
                 right: SingleBoundary::Natural,
             } => {
@@ -323,7 +403,7 @@ where
                         *rhs_n = three * (y_n - y_n1);
                     });
             }
-            RowBoundarys::Mixed {
+            RowBoundary::Mixed {
                 left: SingleBoundary::NotAKnot,
                 right: SingleBoundary::NotAKnot,
             } => {
@@ -381,7 +461,7 @@ where
                         });
                 }
             }
-            RowBoundarys::Mixed { left: _, right: _ } => todo!(),
+            RowBoundary::Mixed { left: _, right: _ } => todo!(),
         }
         Self::thomas(a_up, a_mid, a_low, rhs)
     }
