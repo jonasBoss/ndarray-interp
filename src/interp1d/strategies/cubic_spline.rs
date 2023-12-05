@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{
     s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
-    ScalarOperand, Zip,
+    ScalarOperand, Zip, array,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -232,7 +232,26 @@ impl CubicSpline {
             BoundaryCondition::NotAKnot => {
                 if len == 3 {
                     // We handle this case by constructing a parabola passing through given points.
-                    todo!()
+                    let dx0 = x[1] - x[0];
+                    let dx1 = x[2] - x[1];
+
+                    let y0 = data.index_axis(AX0, 0);
+                    let y1 = data.index_axis(AX0, 1);
+                    let y2 = data.index_axis(AX0, 2);
+                    let slope0 = (y1.to_owned() - y0) / dx0;
+                    let slope1 = (y2.to_owned() - y1) / dx1;
+
+                    a_mid[0] = one; // [0, 0]
+                    a_up[0] = one;  // [0, 1]
+                    a_low[1] = dx1; // [1, 0]
+                    a_mid[1] = two * (dx0 + dx1); // [1, 1]
+                    a_up[1] = dx0;   // [1, 2]
+                    a_low[2] = one;  // [2, 1]
+                    a_mid[2] = one;  // [2, 2]
+
+                    rhs.index_axis_mut(AX0, 0).assign(&(&slope0 * two));
+                    rhs.index_axis_mut(AX0, 1).assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
+                    rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
                 } else {
                     let dx0 = x[1] - x[0];
                     let dx1 = x[2] - x[1];
