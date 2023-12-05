@@ -399,7 +399,7 @@ where
                 rhs.index_axis_mut(AX0, 1)
                     .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
                 rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
-            },
+            }
             (RowBoundary::Mixed { left, right }, _) => {
                 match left.specialize() {
                     SingleBoundary::NotAKnot => {
@@ -421,10 +421,9 @@ where
                     SingleBoundary::Clamped => unreachable!(),
                     SingleBoundary::FirstDeriv(deriv) => todo!(),
                     SingleBoundary::SecondDeriv(deriv) => {
-                        let x_0 = x[0];
-                        let x_1 = x[1];
-                        a_up[0] = x_1 - x_0;
-                        a_mid[0] = two * (x_1 - x_0);
+                        let dx0 = x[1] - x[0];
+                        a_up[0] = dx0;
+                        a_mid[0] = two * dx0;
                         let rhs_0 = rhs.index_axis_mut(AX0, 0);
                         let data_0 = data.index_axis(AX0, 0);
                         let data_1 = data.index_axis(AX0, 1);
@@ -432,7 +431,7 @@ where
                             .and(data_0)
                             .and(data_1)
                             .for_each(|rhs_0, &y_0, &y_1| {
-                                *rhs_0 = three * (y_1 - y_0);
+                                *rhs_0 = three * (y_1 - y_0) - deriv * dx0.pow(two) / two;
                             });
                     }
                 };
@@ -458,11 +457,9 @@ where
                     SingleBoundary::Clamped => unreachable!(),
                     SingleBoundary::FirstDeriv(_) => todo!(),
                     SingleBoundary::SecondDeriv(deriv) => {
-                        // x_n and xn-1
-                        let x_n = x[len - 1];
-                        let x_n1 = x[len - 2];
-                        a_mid[len - 1] = two * (x_n - x_n1);
-                        a_low[len - 1] = x_n - x_n1;
+                        let dxn = x[len - 1] - x[len - 2];
+                        a_mid[len - 1] = two * dxn;
+                        a_low[len - 1] = dxn;
                         let rhs_n = rhs.index_axis_mut(AX0, len - 1);
                         let data_n = data.index_axis(AX0, len - 1);
                         let data_n1 = data.index_axis(AX0, len - 2);
@@ -470,7 +467,7 @@ where
                             .and(data_n)
                             .and(data_n1)
                             .for_each(|rhs_n, &y_n, &y_n1| {
-                                *rhs_n = three * (y_n - y_n1);
+                                *rhs_n = three * (y_n - y_n1) + deriv * dxn.pow(two) / two;
                             });
                     }
                 };
