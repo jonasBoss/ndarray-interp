@@ -4,8 +4,8 @@ use std::{
 };
 
 use ndarray::{
-    s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
-    ScalarOperand, Zip, AssignElem,
+    s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, Ix1, IxDyn,
+    RemoveAxis, ScalarOperand, Zip,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -147,7 +147,7 @@ impl<T, D: Dimension> Default for BoundaryCondition<T, D> {
 }
 
 /// Boundary condition for a single data row
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RowBoundary<T> {
     /// ![`BoundaryCondition::NotAKnot`]
     NotAKnot,
@@ -192,7 +192,7 @@ impl<T: SplineNum> Default for RowBoundary<T> {
 }
 
 /// Boundary condition for a single boundary (one side of one data row)
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SingleBoundary<T> {
     /// ![`BoundaryCondition::NotAKnot`]
     NotAKnot,
@@ -269,13 +269,23 @@ where
     {
         let dim = data.raw_dim();
         let len = dim[0];
-
-        let k: Array<T, D> = match self.boundary {
+        let mut k = Array::zeros(dim.clone());
+        let kv = k.view_mut();
+        match self.boundary {
             BoundaryCondition::Periodic => todo!(),
-            BoundaryCondition::Natural => Self::solve_for_k(x, data, RowBoundary::Natural),
-            BoundaryCondition::Clamped => Self::solve_for_k(x, data, RowBoundary::Clamped),
-            BoundaryCondition::NotAKnot => Self::solve_for_k(x, data, RowBoundary::NotAKnot),
-            BoundaryCondition::Individual(_bounds) => todo!(),
+            BoundaryCondition::Natural => Self::solve_for_k(kv, x, data, RowBoundary::Natural),
+            BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, RowBoundary::Clamped),
+            BoundaryCondition::NotAKnot => Self::solve_for_k(kv, x, data, RowBoundary::NotAKnot),
+            BoundaryCondition::Individual(bounds) => {
+                assert!(kv.raw_dim().remove_axis(AX0) == bounds.raw_dim().remove_axis(AX0)); // TODO: return error
+                assert!(bounds.raw_dim()[0] == 1); // TODO: return error
+                Self::solve_for_k_individual(
+                    kv.into_dyn(),
+                    x,
+                    data.view().into_dyn(),
+                    bounds.view().into_dyn(),
+                );
+            }
         };
 
         let mut a_b_dim = data.raw_dim();
@@ -298,16 +308,40 @@ where
         (c_a, c_b)
     }
 
+    fn solve_for_k_individual<Sx>(
+        mut k: ArrayViewMut<T, IxDyn>,
+        x: &ArrayBase<Sx, Ix1>,
+        data: ArrayView<T, IxDyn>,
+        boundary: ArrayView<RowBoundary<T>, IxDyn>,
+    ) where
+        Sx: Data<Elem = T>,
+    {
+        if k.ndim() > 1 {
+            let ax = Axis(k.ndim() - 1);
+            Zip::from(k.axis_iter_mut(ax))
+                .and(data.axis_iter(ax))
+                .and(boundary.axis_iter(ax))
+                .for_each(|k, data, boundary| Self::solve_for_k_individual(k, x, data, boundary))
+        } else {
+            Self::solve_for_k(
+                k,
+                x,
+                &data,
+                boundary.first().cloned().unwrap_or_else(|| unreachable!()),
+            )
+        }
+    }
+
     /// solves the linear equation `A * k = rhs` with the [`RowBoundary`] used for
     /// each row in the data
     ///  
     /// **returns** k
     fn solve_for_k<Sd, Sx, _D>(
+        k: ArrayViewMut<T, _D>,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
         boundary: RowBoundary<T>,
-    ) -> Array<T, _D>
-    where
+    ) where
         _D: Dimension + RemoveAxis,
         Sd: Data<Elem = T>,
         Sx: Data<Elem = T>,
@@ -327,7 +361,7 @@ where
         let mut a_mid = Array::zeros(len);
         let mut a_low = Array::zeros(len);
 
-        let zero: T = cast(0.0).unwrap_or_else(||unimplemented!());
+        let zero: T = cast(0.0).unwrap_or_else(|| unimplemented!());
         let one: T = cast(1.0).unwrap_or_else(|| unimplemented!());
         let two: T = cast(2.0).unwrap_or_else(|| unimplemented!());
         let three: T = cast(3.0).unwrap_or_else(|| unimplemented!());
@@ -424,7 +458,7 @@ where
                         a_mid[0] = one;
                         a_up[0] = zero;
                         rhs.index_axis_mut(AX0, 0).fill(deriv);
-                    },
+                    }
                     SingleBoundary::SecondDeriv(deriv) => {
                         let dx0 = x[1] - x[0];
                         a_up[0] = dx0;
@@ -461,10 +495,10 @@ where
                     SingleBoundary::Natural => unreachable!(),
                     SingleBoundary::Clamped => unreachable!(),
                     SingleBoundary::FirstDeriv(deriv) => {
-                        a_mid[len-1] = one;
-                        a_low[len-1] = zero;
-                        rhs.index_axis_mut(AX0, len-1).fill(deriv);
-                    },
+                        a_mid[len - 1] = one;
+                        a_low[len - 1] = zero;
+                        rhs.index_axis_mut(AX0, len - 1).fill(deriv);
+                    }
                     SingleBoundary::SecondDeriv(deriv) => {
                         let dxn = x[len - 1] - x[len - 2];
                         a_mid[len - 1] = two * dxn;
@@ -482,18 +516,18 @@ where
                 };
             }
         }
-        Self::thomas(a_up, a_mid, a_low, rhs)
+        Self::thomas(k, a_up, a_mid, a_low, rhs);
     }
 
     /// The Thomas algorithm is used, because the matrix A will be tridiagonal and diagonally dominant
     /// [https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm]
     fn thomas<_D>(
+        mut k: ArrayViewMut<T, _D>,
         a_up: Array1<T>,
         mut a_mid: Array1<T>,
         a_low: Array1<T>,
         mut rhs: Array<T, _D>,
-    ) -> Array<T, _D>
-    where
+    ) where
         _D: Dimension + RemoveAxis,
     {
         let dim = rhs.raw_dim();
@@ -513,7 +547,6 @@ where
                 });
         }
 
-        let mut k = Array::zeros(dim);
         Zip::from(k.index_axis_mut(AX0, len - 1))
             .and(rhs.index_axis(AX0, len - 1))
             .for_each(|k, &rhs| {
@@ -531,7 +564,6 @@ where
                     *k_right = new_k;
                 })
         }
-        k
     }
 
     /// create a cubic-spline interpolation stratgy
