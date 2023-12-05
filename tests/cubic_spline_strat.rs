@@ -1,6 +1,6 @@
 use approx::assert_relative_eq;
 use ndarray::{array, Array1};
-use ndarray_interp::interp1d::{CubicSpline, Interp1D, BoundaryCondition};
+use ndarray_interp::interp1d::{BoundaryCondition, CubicSpline, Interp1D};
 use ndarray_interp::{BuilderError, InterpolateError};
 
 #[test]
@@ -55,7 +55,11 @@ fn extrapolate_false() {
 fn extrapolate_natural() {
     let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
     let interp = Interp1D::builder(data)
-        .strategy(CubicSpline::new().extrapolate(true).boundary(BoundaryCondition::Natural))
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Natural),
+        )
         .build()
         .unwrap();
     let q = Array1::linspace(-3.0, 15.0, 30);
