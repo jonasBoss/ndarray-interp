@@ -1,6 +1,8 @@
 use approx::assert_relative_eq;
 use ndarray::{array, Array1};
-use ndarray_interp::interp1d::{BoundaryCondition, CubicSpline, Interp1D};
+use ndarray_interp::interp1d::{
+    BoundaryCondition, CubicSpline, Interp1D, Interp1DBuilder, RowBoundary, SingleBoundary,
+};
 use ndarray_interp::{BuilderError, InterpolateError};
 
 #[test]
@@ -182,4 +184,27 @@ fn not_a_knot_3_values() {
         -5.
     ];
     assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn multidim_multi_bounds() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
+    let x = array![-1.0, 0.0, 3.0];
+
+    // first data column: natural
+    // second data column top: NotAKnot
+    // second data column bottom: first derivative == 0.5
+    let boundaries = array![[
+        RowBoundary::Natural,
+        RowBoundary::Mixed {
+            left: SingleBoundary::NotAKnot,
+            right: SingleBoundary::FirstDeriv(0.5)
+        }
+    ],];
+    let strat = CubicSpline::new().boundary(BoundaryCondition::Individual(boundaries));
+    let interpolator = Interp1DBuilder::new(y)
+        .x(x)
+        .strategy(strat)
+        .build()
+        .unwrap();
 }
