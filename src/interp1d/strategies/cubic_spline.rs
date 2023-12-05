@@ -7,7 +7,7 @@ use ndarray::{
     s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
     ScalarOperand, Zip,
 };
-use num_traits::{cast, Num, NumCast, Pow, Zero, float};
+use num_traits::{cast, Num, NumCast, Pow};
 
 use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
@@ -67,14 +67,14 @@ impl<T> SplineNum for T where
 ///
 /// let result = interpolator.interp_array(&query).unwrap();
 /// let expect = array![
-///     0.5, 
-///     0.1851851851851852, 
-///     0.01851851851851853, 
-///     -5.551115123125783e-17, 
-///     0.12962962962962965, 
-///     0.40740740740740755, 
-///     0.8333333333333331, 
-///     1.407407407407407, 
+///     0.5,
+///     0.1851851851851852,
+///     0.01851851851851853,
+///     -5.551115123125783e-17,
+///     0.12962962962962965,
+///     0.40740740740740755,
+///     0.8333333333333331,
+///     1.407407407407407,
 ///     2.1296296296296293, 3.0
 /// ];
 /// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
@@ -128,7 +128,7 @@ pub enum SingleBoundary<T> {
 }
 
 impl<T: SplineNum> SingleBoundary<T> {
-    fn specialize(&mut self){
+    fn specialize(&mut self) {
         match self {
             SingleBoundary::NotAKnot => (),
             SingleBoundary::Natural => *self = Self::SecondDeriv(0.0.into()),
@@ -159,7 +159,7 @@ where
     {
         let Self {
             extrapolate,
-            ref boundary,
+            boundary: _,
         } = self;
         let (a, b) = self.calc_coefficients(x, data);
         Ok(CubicSplineStrategy { a, b, extrapolate })
@@ -188,7 +188,7 @@ where
             BoundaryCondition::Natural => Self::calc_k(x, data, RowBoundarys::Natural),
             BoundaryCondition::Clamped => Self::calc_k(x, data, RowBoundarys::Clamped),
             BoundaryCondition::NotAKnot => Self::calc_k(x, data, RowBoundarys::NotAKnot),
-            BoundaryCondition::Individual(bounds) => todo!(),
+            BoundaryCondition::Individual(_bounds) => todo!(),
         };
 
         let mut a_b_dim = data.raw_dim();
@@ -211,12 +211,12 @@ where
         (c_a, c_b)
     }
 
-    fn calc_k<Sd, Sx, _D>(        
+    fn calc_k<Sd, Sx, _D>(
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
-        boundary: RowBoundarys<T>
-    )-> Array<T, _D>
-    where 
+        boundary: RowBoundarys<T>,
+    ) -> Array<T, _D>
+    where
         _D: Dimension + RemoveAxis,
         Sd: Data<Elem = T>,
         Sx: Data<Elem = T>,
@@ -276,7 +276,10 @@ where
         // apply boundary conditions
         match boundary {
             RowBoundarys::Periodic => todo!(),
-            RowBoundarys::Mixed { left: SingleBoundary::Natural ,  right: SingleBoundary::Natural } => {
+            RowBoundarys::Mixed {
+                left: SingleBoundary::Natural,
+                right: SingleBoundary::Natural,
+            } => {
                 let x_0 = x[0];
                 let x_1 = x[1];
                 a_up[0] = x_1 - x_0;
@@ -306,7 +309,10 @@ where
                         *rhs_n = three * (y_n - y_n1);
                     });
             }
-            RowBoundarys::Mixed { left: SingleBoundary::NotAKnot ,  right: SingleBoundary::NotAKnot } => {
+            RowBoundarys::Mixed {
+                left: SingleBoundary::NotAKnot,
+                right: SingleBoundary::NotAKnot,
+            } => {
                 if len == 3 {
                     // We handle this case by constructing a parabola passing through given points.
                     let dx0 = x[1] - x[0];
@@ -361,7 +367,7 @@ where
                         });
                 }
             }
-            RowBoundarys::Mixed { left, right } => todo!(),
+            RowBoundarys::Mixed { left: _, right: _ } => todo!(),
         }
         Self::thomas(a_up, a_mid, a_low, rhs)
     }
