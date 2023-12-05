@@ -15,7 +15,7 @@ use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
-trait SplineNum:
+pub trait SplineNum:
     Debug
     + Num
     + Copy
@@ -27,7 +27,6 @@ trait SplineNum:
     + Pow<Self, Output = Self>
     + ScalarOperand
     + Send
-    + From<f64>
 {
 }
 
@@ -43,7 +42,6 @@ impl<T> SplineNum for T where
         + Pow<Self, Output = Self>
         + ScalarOperand
         + Send
-        + From<f64>
 {
 }
 
@@ -131,8 +129,12 @@ impl<T: SplineNum> SingleBoundary<T> {
     fn specialize(&mut self) {
         match self {
             SingleBoundary::NotAKnot => (),
-            SingleBoundary::Natural => *self = Self::SecondDeriv(0.0.into()),
-            SingleBoundary::Clamped => *self = Self::FirstDeriv(0.0.into()),
+            SingleBoundary::Natural => {
+                *self = Self::SecondDeriv(cast(0.0).unwrap_or_else(|| unimplemented!()))
+            }
+            SingleBoundary::Clamped => {
+                *self = Self::FirstDeriv(cast(0.0).unwrap_or_else(|| unimplemented!()))
+            }
             SingleBoundary::FirstDeriv(_) => (),
             SingleBoundary::SecondDeriv(_) => (),
         }
