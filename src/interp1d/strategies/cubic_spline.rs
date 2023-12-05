@@ -202,16 +202,8 @@ impl CubicSpline {
             BoundaryCondition::Natural => {
                 let x_0 = x[0];
                 let x_1 = x[1];
-
-                a_up[0] = one / (x_1 - x_0);
-                a_mid[0] = two / (x_1 - x_0);
-
-                // x_n and xn-1
-                let x_n = x[len - 1];
-                let x_n1 = x[len - 2];
-                a_mid[len - 1] = two / (x_n - x_n1);
-                a_low[len - 1] = one / (x_n - x_n1);
-
+                a_up[0] = x_1 - x_0;
+                a_mid[0] = two * (x_1 - x_0);
                 let rhs_0 = rhs.index_axis_mut(AX0, 0);
                 let data_0 = data.index_axis(AX0, 0);
                 let data_1 = data.index_axis(AX0, 1);
@@ -219,9 +211,14 @@ impl CubicSpline {
                     .and(data_0)
                     .and(data_1)
                     .for_each(|rhs_0, &y_0, &y_1| {
-                        *rhs_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
+                        *rhs_0 = three * (y_1 - y_0);
                     });
-
+                
+                // x_n and xn-1
+                let x_n = x[len - 1];
+                let x_n1 = x[len - 2];
+                a_mid[len - 1] = two * (x_n - x_n1);
+                a_low[len - 1] = x_n - x_n1;
                 let rhs_n = rhs.index_axis_mut(AX0, len - 1);
                 let data_n = data.index_axis(AX0, len - 1);
                 let data_n1 = data.index_axis(AX0, len - 2);
@@ -229,7 +226,7 @@ impl CubicSpline {
                     .and(data_n)
                     .and(data_n1)
                     .for_each(|rhs_n, &y_n, &y_n1| {
-                        *rhs_n = three * (y_n - y_n1) / (x_n - x_n1).pow(two);
+                        *rhs_n = three * (y_n - y_n1);
                     });
             }
             BoundaryCondition::NotAKnot => {
@@ -241,7 +238,7 @@ impl CubicSpline {
                     let dx1 = x[2] - x[1];
                     a_mid[0] = dx1;
                     let d = x[2] - x[0];
-                    a_up[1] = d;
+                    a_up[0] = d;
                     let tmp1 = (dx0 + two * d) * dx1;
                     Zip::from(rhs.index_axis_mut(AX0, 0))
                         .and(data.index_axis(AX0, 0))
@@ -255,7 +252,7 @@ impl CubicSpline {
                     let dx_2 = x[len - 2] - x[len - 3];
                     a_mid[len - 1] = dx_1;
                     let d = x[len - 1] - x[len - 3];
-                    a_low[len - 2] = d;
+                    a_low[len - 1] = d;
                     let tmp1 = (two * d + dx_1) * dx_2;
                     Zip::from(rhs.index_axis_mut(AX0, len - 1))
                         .and(data.index_axis(AX0, len - 1))
@@ -269,12 +266,7 @@ impl CubicSpline {
             }
             BoundaryCondition::Mixed { left, right } => todo!(),
         }
-
-        println!("{a_up:?}");
-        println!("{a_mid:?}");
-        println!("{a_low:?}");
-        println!("{rhs:?}");
-
+        
         let k = Self::thomas(a_up, a_mid, a_low, rhs);
 
         let mut a_b_dim = data.raw_dim();
