@@ -9,7 +9,7 @@ use crate::{BuilderError, InterpolateError};
 mod cubic_spline;
 mod linear;
 
-pub use cubic_spline::{BoundaryCondition, RowBoundarys, SingleBoundary, CubicSpline};
+pub use cubic_spline::{BoundaryCondition, CubicSpline, RowBoundarys, SingleBoundary};
 pub use linear::Linear;
 
 pub trait Interp1DStrategyBuilder<Sd, Sx, D>
