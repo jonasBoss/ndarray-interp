@@ -5,15 +5,47 @@ use std::{
 
 use ndarray::{
     s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
-    ScalarOperand, Zip, array,
+    ScalarOperand, Zip,
 };
-use num_traits::{cast, Num, NumCast, Pow};
+use num_traits::{cast, Num, NumCast, Pow, Zero, float};
 
 use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
 use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
+
+trait SplineNum:
+    Debug
+    + Num
+    + Copy
+    + PartialOrd
+    + Sub
+    + SubAssign
+    + NumCast
+    + Add
+    + Pow<Self, Output = Self>
+    + ScalarOperand
+    + Send
+    + From<f64>
+{
+}
+
+impl<T> SplineNum for T where
+    T: Debug
+        + Num
+        + Copy
+        + PartialOrd
+        + Sub
+        + SubAssign
+        + NumCast
+        + Add
+        + Pow<Self, Output = Self>
+        + ScalarOperand
+        + Send
+        + From<f64>
+{
+}
 
 /// The CubicSpline 1d interpolation Strategy
 ///
@@ -35,70 +67,82 @@ const AX0: Axis = Axis(0);
 ///
 /// let result = interpolator.interp_array(&query).unwrap();
 /// let expect = array![
-///     0.5,
-///     0.2109053497942387,
-///     0.020576131687242816,
-///     0.01851851851851849,
-///     0.21364883401920443,
-///     0.5733882030178327,
-///     1.0648148148148144,
-///     1.6550068587105617,
-///     2.3110425240054866,
-///     3.0
+///     0.5, 
+///     0.1851851851851852, 
+///     0.01851851851851853, 
+///     -5.551115123125783e-17, 
+///     0.12962962962962965, 
+///     0.40740740740740755, 
+///     0.8333333333333331, 
+///     1.407407407407407, 
+///     2.1296296296296293, 3.0
 /// ];
 /// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
 /// ```
 #[derive(Debug)]
-pub struct CubicSpline {
+pub struct CubicSpline<T, D: Dimension> {
     extrapolate: bool,
-    boundary: BoundaryCondition,
+    boundary: BoundaryCondition<T, D>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum BoundaryCondition {
+pub enum BoundaryCondition<T, D: Dimension> {
+    Periodic,
+    Natural,
+    Clamped,
+    NotAKnot,
+    Individual(Array<RowBoundarys<T>, D>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RowBoundarys<T> {
     Periodic,
     Mixed {
-        left: BoundaryType,
-        right: BoundaryType,
+        left: SingleBoundary<T>,
+        right: SingleBoundary<T>,
     },
 }
 
-impl BoundaryCondition {
-    pub const Natural: BoundaryCondition = BoundaryCondition::Mixed {
-        left: BoundaryType::Natural,
-        right: BoundaryType::Natural,
+impl<T: SplineNum> RowBoundarys<T> {
+    pub const Natural: RowBoundarys<T> = RowBoundarys::Mixed {
+        left: SingleBoundary::Natural,
+        right: SingleBoundary::Natural,
     };
-    pub const NotAKnot: BoundaryCondition = BoundaryCondition::Mixed {
-        left: BoundaryType::NotAKnot,
-        right: BoundaryType::NotAKnot,
+    pub const NotAKnot: RowBoundarys<T> = RowBoundarys::Mixed {
+        left: SingleBoundary::NotAKnot,
+        right: SingleBoundary::NotAKnot,
     };
-    pub const Clamped: BoundaryCondition = BoundaryCondition::Mixed {
-        left: BoundaryType::Clamped,
-        right: BoundaryType::Clamped,
+    pub const Clamped: RowBoundarys<T> = RowBoundarys::Mixed {
+        left: SingleBoundary::Clamped,
+        right: SingleBoundary::Clamped,
     };
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum BoundaryType {
-    Natural,
+pub enum SingleBoundary<T> {
     NotAKnot,
+    Natural,
     Clamped,
+    FirstDeriv(T),
+    SecondDeriv(T),
 }
 
-impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline
+impl<T: SplineNum> SingleBoundary<T> {
+    fn specialize(&mut self){
+        match self {
+            SingleBoundary::NotAKnot => (),
+            SingleBoundary::Natural => *self = Self::SecondDeriv(0.0.into()),
+            SingleBoundary::Clamped => *self = Self::FirstDeriv(0.0.into()),
+            SingleBoundary::FirstDeriv(_) => (),
+            SingleBoundary::SecondDeriv(_) => (),
+        }
+    }
+}
+
+impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline<Sd::Elem, D>
 where
     Sd: Data,
-    Sd::Elem: Debug
-        + Num
-        + Copy
-        + PartialOrd
-        + Sub
-        + SubAssign
-        + NumCast
-        + Add
-        + Pow<Sd::Elem, Output = Sd::Elem>
-        + ScalarOperand
-        + Send,
+    Sd::Elem: SplineNum,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
@@ -122,25 +166,60 @@ where
     }
 }
 
-impl CubicSpline {
-    fn calc_coefficients<Sd, Sx, D>(
+impl<T, D> CubicSpline<T, D>
+where
+    D: Dimension + RemoveAxis,
+    T: SplineNum,
+{
+    fn calc_coefficients<Sd, Sx>(
         self,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, D>,
     ) -> (Array<Sd::Elem, D>, Array<Sd::Elem, D>)
     where
-        Sd: Data,
-        Sd::Elem: Num
-            + Copy
-            + Sub
-            + SubAssign
-            + NumCast
-            + Add
-            + Pow<Sd::Elem, Output = Sd::Elem>
-            + ScalarOperand
-            + Debug,
-        Sx: Data<Elem = Sd::Elem>,
-        D: Dimension + RemoveAxis,
+        Sd: Data<Elem = T>,
+        Sx: Data<Elem = T>,
+    {
+        let dim = data.raw_dim();
+        let len = dim[0];
+
+        let k: Array<T, D> = match self.boundary {
+            BoundaryCondition::Periodic => todo!(),
+            BoundaryCondition::Natural => Self::calc_k(x, data, RowBoundarys::Natural),
+            BoundaryCondition::Clamped => Self::calc_k(x, data, RowBoundarys::Clamped),
+            BoundaryCondition::NotAKnot => Self::calc_k(x, data, RowBoundarys::NotAKnot),
+            BoundaryCondition::Individual(bounds) => todo!(),
+        };
+
+        let mut a_b_dim = data.raw_dim();
+        a_b_dim[0] -= 1;
+        let mut c_a = Array::zeros(a_b_dim.clone());
+        let mut c_b = Array::zeros(a_b_dim);
+        for index in 0..len - 1 {
+            Zip::from(c_a.index_axis_mut(AX0, index))
+                .and(c_b.index_axis_mut(AX0, index))
+                .and(k.index_axis(AX0, index))
+                .and(k.index_axis(AX0, index + 1))
+                .and(data.index_axis(AX0, index))
+                .and(data.index_axis(AX0, index + 1))
+                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
+                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
+                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
+                })
+        }
+
+        (c_a, c_b)
+    }
+
+    fn calc_k<Sd, Sx, _D>(        
+        x: &ArrayBase<Sx, Ix1>,
+        data: &ArrayBase<Sd, _D>,
+        boundary: RowBoundarys<T>
+    )-> Array<T, _D>
+    where 
+        _D: Dimension + RemoveAxis,
+        Sd: Data<Elem = T>,
+        Sx: Data<Elem = T>,
     {
         let dim = data.raw_dim();
         let len = dim[0];
@@ -150,8 +229,6 @@ impl CubicSpline {
          * https://en.wikipedia.org/wiki/Spline_interpolation#Example
          *
          * This requires solving the Linear equation A * k = rhs
-         * The Thomas algorithm is used, because the matrix A will be tridiagonal and diagonally dominant.
-         * (https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm)
          */
 
         // upper, middle and lower diagonal of A
@@ -177,7 +254,7 @@ impl CubicSpline {
             });
 
         // RHS vector
-        let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
+        let mut rhs = Array::zeros(dim.clone());
 
         for i in 1..len - 1 {
             let rhs = rhs.index_axis_mut(AX0, i);
@@ -197,9 +274,9 @@ impl CubicSpline {
         }
 
         // apply boundary conditions
-        match self.boundary {
-            BoundaryCondition::Periodic => todo!(),
-            BoundaryCondition::Natural => {
+        match boundary {
+            RowBoundarys::Periodic => todo!(),
+            RowBoundarys::Mixed { left: SingleBoundary::Natural ,  right: SingleBoundary::Natural } => {
                 let x_0 = x[0];
                 let x_1 = x[1];
                 a_up[0] = x_1 - x_0;
@@ -213,7 +290,7 @@ impl CubicSpline {
                     .for_each(|rhs_0, &y_0, &y_1| {
                         *rhs_0 = three * (y_1 - y_0);
                     });
-                
+
                 // x_n and xn-1
                 let x_n = x[len - 1];
                 let x_n1 = x[len - 2];
@@ -229,7 +306,7 @@ impl CubicSpline {
                         *rhs_n = three * (y_n - y_n1);
                     });
             }
-            BoundaryCondition::NotAKnot => {
+            RowBoundarys::Mixed { left: SingleBoundary::NotAKnot ,  right: SingleBoundary::NotAKnot } => {
                 if len == 3 {
                     // We handle this case by constructing a parabola passing through given points.
                     let dx0 = x[1] - x[0];
@@ -242,15 +319,16 @@ impl CubicSpline {
                     let slope1 = (y2.to_owned() - y1) / dx1;
 
                     a_mid[0] = one; // [0, 0]
-                    a_up[0] = one;  // [0, 1]
+                    a_up[0] = one; // [0, 1]
                     a_low[1] = dx1; // [1, 0]
                     a_mid[1] = two * (dx0 + dx1); // [1, 1]
-                    a_up[1] = dx0;   // [1, 2]
-                    a_low[2] = one;  // [2, 1]
-                    a_mid[2] = one;  // [2, 2]
+                    a_up[1] = dx0; // [1, 2]
+                    a_low[2] = one; // [2, 1]
+                    a_mid[2] = one; // [2, 2]
 
                     rhs.index_axis_mut(AX0, 0).assign(&(&slope0 * two));
-                    rhs.index_axis_mut(AX0, 1).assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
+                    rhs.index_axis_mut(AX0, 1)
+                        .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
                     rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
                 } else {
                     let dx0 = x[1] - x[0];
@@ -283,40 +361,21 @@ impl CubicSpline {
                         });
                 }
             }
-            BoundaryCondition::Mixed { left, right } => todo!(),
+            RowBoundarys::Mixed { left, right } => todo!(),
         }
-        
-        let k = Self::thomas(a_up, a_mid, a_low, rhs);
-
-        let mut a_b_dim = data.raw_dim();
-        a_b_dim[0] -= 1;
-        let mut c_a = Array::zeros(a_b_dim.clone());
-        let mut c_b = Array::zeros(a_b_dim);
-        for index in 0..len - 1 {
-            Zip::from(c_a.index_axis_mut(AX0, index))
-                .and(c_b.index_axis_mut(AX0, index))
-                .and(k.index_axis(AX0, index))
-                .and(k.index_axis(AX0, index + 1))
-                .and(data.index_axis(AX0, index))
-                .and(data.index_axis(AX0, index + 1))
-                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
-                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
-                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
-                })
-        }
-
-        (c_a, c_b)
+        Self::thomas(a_up, a_mid, a_low, rhs)
     }
 
-    fn thomas<T, D>(
+    /// The Thomas algorithm is used, because the matrix A will be tridiagonal and diagonally dominant
+    /// [https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm]
+    fn thomas<_D>(
         a_up: Array1<T>,
         mut a_mid: Array1<T>,
         a_low: Array1<T>,
-        mut rhs: Array<T, D>,
-    ) -> Array<T, D>
+        mut rhs: Array<T, _D>,
+    ) -> Array<T, _D>
     where
-        D: Dimension + RemoveAxis,
-        T: Copy + Num + SubAssign,
+        _D: Dimension + RemoveAxis,
     {
         let dim = rhs.raw_dim();
         let len = dim[0];
@@ -360,7 +419,7 @@ impl CubicSpline {
     pub fn new() -> Self {
         Self {
             extrapolate: false,
-            boundary: BoundaryCondition::Natural,
+            boundary: BoundaryCondition::NotAKnot,
         }
     }
 
@@ -371,13 +430,17 @@ impl CubicSpline {
     }
 
     /// set the boundary condition. default is [`BoundaryCondition::Natural`]
-    pub fn boundary(mut self, boundary: BoundaryCondition) -> Self {
+    pub fn boundary(mut self, boundary: BoundaryCondition<T, D>) -> Self {
         self.boundary = boundary;
         self
     }
 }
 
-impl Default for CubicSpline {
+impl<T, D> Default for CubicSpline<T, D>
+where
+    D: Dimension + RemoveAxis,
+    T: SplineNum,
+{
     fn default() -> Self {
         Self::new()
     }
