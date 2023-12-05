@@ -4,7 +4,7 @@ use std::{
 };
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis, ScalarOperand, Zip,
+    s, Array, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis, ScalarOperand, Zip, Array1,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -274,7 +274,35 @@ impl CubicSpline {
         println!("{a_low:?}");
         println!("{rhs:?}");
 
-        // now solving with Thomas algorithm
+        let k = Self::thomas(a_up, a_mid, a_low, rhs);
+
+        let mut a_b_dim = data.raw_dim();
+        a_b_dim[0] -= 1;
+        let mut c_a = Array::zeros(a_b_dim.clone());
+        let mut c_b = Array::zeros(a_b_dim);
+        for index in 0..len - 1 {
+            Zip::from(c_a.index_axis_mut(AX0, index))
+                .and(c_b.index_axis_mut(AX0, index))
+                .and(k.index_axis(AX0, index))
+                .and(k.index_axis(AX0, index + 1))
+                .and(data.index_axis(AX0, index))
+                .and(data.index_axis(AX0, index + 1))
+                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
+                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
+                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
+                })
+        }
+
+        (c_a, c_b)
+    }
+
+    fn thomas<T, D>(a_up: Array1<T>, mut a_mid: Array1<T>, a_low: Array1<T>, mut rhs: Array<T, D>) -> Array<T, D>
+    where 
+        D: Dimension + RemoveAxis,
+        T: Copy + Num + SubAssign,
+    {
+        let dim = rhs.raw_dim();
+        let len = dim[0];
         let mut rhs_left = rhs.index_axis(AX0, 0).into_owned();
         for i in 1..len {
             let w = a_low[i] / a_mid[i - 1];
@@ -308,25 +336,7 @@ impl CubicSpline {
                     *k_right = new_k;
                 })
         }
-
-        let mut a_b_dim = data.raw_dim();
-        a_b_dim[0] -= 1;
-        let mut c_a = Array::zeros(a_b_dim.clone());
-        let mut c_b = Array::zeros(a_b_dim);
-        for index in 0..len - 1 {
-            Zip::from(c_a.index_axis_mut(AX0, index))
-                .and(c_b.index_axis_mut(AX0, index))
-                .and(k.index_axis(AX0, index))
-                .and(k.index_axis(AX0, index + 1))
-                .and(data.index_axis(AX0, index))
-                .and(data.index_axis(AX0, index + 1))
-                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
-                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
-                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
-                })
-        }
-
-        (c_a, c_b)
+        k
     }
 
     /// create a cubic-spline interpolation stratgy
