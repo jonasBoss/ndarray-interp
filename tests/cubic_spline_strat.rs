@@ -110,7 +110,6 @@ fn extrapolate_not_a_knot() {
         .unwrap();
     let q = Array1::linspace(-3.0, 15.0, 30);
     let res = interp.interp_array(&q).unwrap();
-    println!("{res:?}");
     // values from scipy.interpolate.QubicSpline with bc_type="natural"
     let expect = array![
         0.94398816,
@@ -143,6 +142,40 @@ fn extrapolate_not_a_knot() {
         9.42855462,
         8.09710264,
         5.82523122
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn not_a_knot_3_values() {
+    let interp = Interp1D::builder(array![1.0, 2.0, 0.0])
+        .strategy(
+            CubicSpline::new()
+                .boundary(BoundaryCondition::NotAKnot)
+                .extrapolate(true),
+        )
+        .build()
+        .unwrap();
+
+    let q = Array1::linspace(-1.0, 3.0, 15);
+    let res = interp.interp_array(&q).unwrap();
+
+    let expect = array![
+        -3.,
+        -1.55102041,
+        -0.34693878,
+        0.6122449,
+        1.32653061,
+        1.79591837,
+        2.02040816,
+        2.,
+        1.73469388,
+        1.2244898,
+        0.46938776,
+        -0.53061224,
+        -1.7755102,
+        -3.26530612,
+        -5.
     ];
     assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
