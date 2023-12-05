@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{
     s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
-    ScalarOperand, Zip,
+    ScalarOperand, Zip, AssignElem,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -327,6 +327,7 @@ where
         let mut a_mid = Array::zeros(len);
         let mut a_low = Array::zeros(len);
 
+        let zero: T = cast(0.0).unwrap_or_else(||unimplemented!());
         let one: T = cast(1.0).unwrap_or_else(|| unimplemented!());
         let two: T = cast(2.0).unwrap_or_else(|| unimplemented!());
         let three: T = cast(3.0).unwrap_or_else(|| unimplemented!());
@@ -419,7 +420,11 @@ where
                     }
                     SingleBoundary::Natural => unreachable!(),
                     SingleBoundary::Clamped => unreachable!(),
-                    SingleBoundary::FirstDeriv(deriv) => todo!(),
+                    SingleBoundary::FirstDeriv(deriv) => {
+                        a_mid[0] = one;
+                        a_up[0] = zero;
+                        rhs.index_axis_mut(AX0, 0).fill(deriv);
+                    },
                     SingleBoundary::SecondDeriv(deriv) => {
                         let dx0 = x[1] - x[0];
                         a_up[0] = dx0;
@@ -455,7 +460,11 @@ where
                     }
                     SingleBoundary::Natural => unreachable!(),
                     SingleBoundary::Clamped => unreachable!(),
-                    SingleBoundary::FirstDeriv(_) => todo!(),
+                    SingleBoundary::FirstDeriv(deriv) => {
+                        a_mid[len-1] = one;
+                        a_low[len-1] = zero;
+                        rhs.index_axis_mut(AX0, len-1).fill(deriv);
+                    },
                     SingleBoundary::SecondDeriv(deriv) => {
                         let dxn = x[len - 1] - x[len - 2];
                         a_mid[len - 1] = two * dxn;
