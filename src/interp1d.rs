@@ -32,7 +32,7 @@ mod strategies;
 pub use aliases::*;
 pub use strategies::{
     BoundaryCondition, CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear,
-    RowBoundarys, SingleBoundary,
+    RowBoundary, SingleBoundary,
 };
 
 /// One dimensional interpolator
