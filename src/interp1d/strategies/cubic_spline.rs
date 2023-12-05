@@ -84,14 +84,14 @@ pub struct CubicSpline<T, D: Dimension> {
 }
 
 /// Boundary conditions for the whole dataset
-/// 
+///
 /// The boundary condition is structured in three hirarchic enum's:
 ///  - This: The toplevel boundary applys to the whole dataset
 ///  - [`RowBoundary`] applys to a single row in the dataset
 ///  - [`SingleBoundary`] applys to an individual boundary of a single row
-/// 
+///
 /// the default is the [`NotAKnot`](BoundaryCondition::NotAKnot) boundary in each level
-/// 
+///
 /// ## Example
 /// In a complex case all boundaries can be set individually:
 /// ``` rust
@@ -99,16 +99,16 @@ pub struct CubicSpline<T, D: Dimension> {
 /// # use ndarray_interp::interp1d::*;
 /// # use ndarray::*;
 /// # use approx::*;
-/// 
+///
 /// let y = array![
 ///     [0.5, 1.0],
 ///     [0.0, 1.5],
 ///     [3.0, 0.5],
 /// ];
 /// let x = array![-1.0, 0.0, 3.0];
-/// 
+///
 /// // first data column: natural
-/// // second data column top: NotAKnot 
+/// // second data column top: NotAKnot
 /// // second data column bottom: first derivative == 0.5
 /// let boundaries = array![
 ///     [
@@ -121,8 +121,8 @@ pub struct CubicSpline<T, D: Dimension> {
 ///     .x(x)
 ///     .strategy(strat)
 ///     .build().unwrap();
-/// 
-/// ``` 
+///
+/// ```
 #[derive(Debug, PartialEq, Eq)]
 pub enum BoundaryCondition<T, D: Dimension> {
     /// Not a knot boundary. The first and second segment at a curve end are the same polynomial.
@@ -135,7 +135,7 @@ pub enum BoundaryCondition<T, D: Dimension> {
     /// The interpolated functions is assumed to be periodic.
     /// The first and last element in the data must be equal.
     Periodic,
-    /// Set individual boundary conditions for each row in the data 
+    /// Set individual boundary conditions for each row in the data
     /// and/or individual conditions for the left and right boundary
     Individual(Array<RowBoundary<T>, D>),
 }
@@ -219,7 +219,7 @@ impl<T: SplineNum> SingleBoundary<T> {
     }
 }
 
-impl<T: SplineNum> Default for SingleBoundary<T>{
+impl<T: SplineNum> Default for SingleBoundary<T> {
     fn default() -> Self {
         Self::NotAKnot
     }
@@ -403,11 +403,8 @@ where
                         *rhs_n = three * (y_n - y_n1);
                     });
             }
-            RowBoundary::Mixed {
-                left: SingleBoundary::NotAKnot,
-                right: SingleBoundary::NotAKnot,
-            } => {
-                if len == 3 {
+            RowBoundary::Mixed { left, right } => {
+                if left == SingleBoundary::NotAKnot && right == left && len == 3 {
                     // We handle this case by constructing a parabola passing through given points.
                     let dx0 = x[1] - x[0];
                     let dx1 = x[2] - x[1];
@@ -431,37 +428,51 @@ where
                         .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
                     rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
                 } else {
-                    let dx0 = x[1] - x[0];
-                    let dx1 = x[2] - x[1];
-                    a_mid[0] = dx1;
-                    let d = x[2] - x[0];
-                    a_up[0] = d;
-                    let tmp1 = (dx0 + two * d) * dx1;
-                    Zip::from(rhs.index_axis_mut(AX0, 0))
-                        .and(data.index_axis(AX0, 0))
-                        .and(data.index_axis(AX0, 1))
-                        .and(data.index_axis(AX0, 2))
-                        .for_each(|b, &y0, &y1, &y2| {
-                            *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1) / d;
-                        });
-
-                    let dx_1 = x[len - 1] - x[len - 2];
-                    let dx_2 = x[len - 2] - x[len - 3];
-                    a_mid[len - 1] = dx_1;
-                    let d = x[len - 1] - x[len - 3];
-                    a_low[len - 1] = d;
-                    let tmp1 = (two * d + dx_1) * dx_2;
-                    Zip::from(rhs.index_axis_mut(AX0, len - 1))
-                        .and(data.index_axis(AX0, len - 1))
-                        .and(data.index_axis(AX0, len - 2))
-                        .and(data.index_axis(AX0, len - 3))
-                        .for_each(|b, &y_1, &y_2, &y_3| {
-                            *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2 + tmp1 * (y_1 - y_2) / dx_1)
-                                / d;
-                        });
-                }
+                    match left.specialize() {
+                        SingleBoundary::NotAKnot => {
+                            let dx0 = x[1] - x[0];
+                            let dx1 = x[2] - x[1];
+                            a_mid[0] = dx1;
+                            let d = x[2] - x[0];
+                            a_up[0] = d;
+                            let tmp1 = (dx0 + two * d) * dx1;
+                            Zip::from(rhs.index_axis_mut(AX0, 0))
+                                .and(data.index_axis(AX0, 0))
+                                .and(data.index_axis(AX0, 1))
+                                .and(data.index_axis(AX0, 2))
+                                .for_each(|b, &y0, &y1, &y2| {
+                                    *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1)
+                                        / d;
+                                });
+                        }
+                        SingleBoundary::Natural => unreachable!(),
+                        SingleBoundary::Clamped => unreachable!(),
+                        SingleBoundary::FirstDeriv(_) => todo!(),
+                        SingleBoundary::SecondDeriv(_) => todo!(),
+                    };
+                    match right.specialize() {
+                        SingleBoundary::NotAKnot => {                    
+                            let dx_1 = x[len - 1] - x[len - 2];
+                            let dx_2 = x[len - 2] - x[len - 3];
+                            a_mid[len - 1] = dx_1;
+                            let d = x[len - 1] - x[len - 3];
+                            a_low[len - 1] = d;
+                            let tmp1 = (two * d + dx_1) * dx_2;
+                            Zip::from(rhs.index_axis_mut(AX0, len - 1))
+                                .and(data.index_axis(AX0, len - 1))
+                                .and(data.index_axis(AX0, len - 2))
+                                .and(data.index_axis(AX0, len - 3))
+                                .for_each(|b, &y_1, &y_2, &y_3| {
+                                    *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2 + tmp1 * (y_1 - y_2) / dx_1)
+                                        / d;
+                                });},
+                        SingleBoundary::Natural => unreachable!(),
+                        SingleBoundary::Clamped => unreachable!(),
+                        SingleBoundary::FirstDeriv(_) => todo!(),
+                        SingleBoundary::SecondDeriv(_) => todo!(),
+                    };
+                };
             }
-            RowBoundary::Mixed { left: _, right: _ } => todo!(),
         }
         Self::thomas(a_up, a_mid, a_low, rhs)
     }
