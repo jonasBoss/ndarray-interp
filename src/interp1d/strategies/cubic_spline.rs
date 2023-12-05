@@ -4,7 +4,8 @@ use std::{
 };
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis, ScalarOperand, Zip, Array1,
+    s, Array, Array1, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis,
+    ScalarOperand, Zip,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -261,7 +262,7 @@ impl CubicSpline {
                         .and(data.index_axis(AX0, len - 2))
                         .and(data.index_axis(AX0, len - 3))
                         .for_each(|b, &y_1, &y_2, &y_3| {
-                            *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2 + tmp1 * (y_1 - y_2)/ dx_1)
+                            *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2 + tmp1 * (y_1 - y_2) / dx_1)
                                 / d;
                         });
                 }
@@ -296,8 +297,13 @@ impl CubicSpline {
         (c_a, c_b)
     }
 
-    fn thomas<T, D>(a_up: Array1<T>, mut a_mid: Array1<T>, a_low: Array1<T>, mut rhs: Array<T, D>) -> Array<T, D>
-    where 
+    fn thomas<T, D>(
+        a_up: Array1<T>,
+        mut a_mid: Array1<T>,
+        a_low: Array1<T>,
+        mut rhs: Array<T, D>,
+    ) -> Array<T, D>
+    where
         D: Dimension + RemoveAxis,
         T: Copy + Num + SubAssign,
     {
