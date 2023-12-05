@@ -327,9 +327,9 @@ where
         let mut a_mid = Array::zeros(len);
         let mut a_low = Array::zeros(len);
 
-        let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());
-        let two: Sd::Elem = cast(2.0).unwrap_or_else(|| unimplemented!());
-        let three: Sd::Elem = cast(3.0).unwrap_or_else(|| unimplemented!());
+        let one: T = cast(1.0).unwrap_or_else(|| unimplemented!());
+        let two: T = cast(2.0).unwrap_or_else(|| unimplemented!());
+        let three: T = cast(3.0).unwrap_or_else(|| unimplemented!());
 
         Zip::from(a_up.slice_mut(s![1..-1]))
             .and(a_mid.slice_mut(s![1..-1]))
@@ -365,108 +365,114 @@ where
         }
 
         // apply boundary conditions
-        match boundary.specialize() {
-            RowBoundary::Periodic => todo!(),
-            RowBoundary::Clamped => unreachable!(),
-            RowBoundary::Natural => unreachable!(),
-            RowBoundary::NotAKnot => unreachable!(),
-            RowBoundary::Mixed { left, right } => {
-                if left == SingleBoundary::NotAKnot && right == left && len == 3 {
-                    // We handle this case by constructing a parabola passing through given points.
-                    let dx0 = x[1] - x[0];
-                    let dx1 = x[2] - x[1];
+        match (boundary.specialize(), len) {
+            (RowBoundary::Periodic, _) => todo!(),
+            (RowBoundary::Clamped, _) => unreachable!(),
+            (RowBoundary::Natural, _) => unreachable!(),
+            (RowBoundary::NotAKnot, _) => unreachable!(),
+            (
+                RowBoundary::Mixed {
+                    left: SingleBoundary::NotAKnot,
+                    right: SingleBoundary::NotAKnot,
+                },
+                3,
+            ) => {
+                // We handle this case by constructing a parabola passing through given points.
+                let dx0 = x[1] - x[0];
+                let dx1 = x[2] - x[1];
 
-                    let y0 = data.index_axis(AX0, 0);
-                    let y1 = data.index_axis(AX0, 1);
-                    let y2 = data.index_axis(AX0, 2);
-                    let slope0 = (y1.to_owned() - y0) / dx0;
-                    let slope1 = (y2.to_owned() - y1) / dx1;
+                let y0 = data.index_axis(AX0, 0);
+                let y1 = data.index_axis(AX0, 1);
+                let y2 = data.index_axis(AX0, 2);
+                let slope0 = (y1.to_owned() - y0) / dx0;
+                let slope1 = (y2.to_owned() - y1) / dx1;
 
-                    a_mid[0] = one; // [0, 0]
-                    a_up[0] = one; // [0, 1]
-                    a_low[1] = dx1; // [1, 0]
-                    a_mid[1] = two * (dx0 + dx1); // [1, 1]
-                    a_up[1] = dx0; // [1, 2]
-                    a_low[2] = one; // [2, 1]
-                    a_mid[2] = one; // [2, 2]
+                a_mid[0] = one; // [0, 0]
+                a_up[0] = one; // [0, 1]
+                a_low[1] = dx1; // [1, 0]
+                a_mid[1] = two * (dx0 + dx1); // [1, 1]
+                a_up[1] = dx0; // [1, 2]
+                a_low[2] = one; // [2, 1]
+                a_mid[2] = one; // [2, 2]
 
-                    rhs.index_axis_mut(AX0, 0).assign(&(&slope0 * two));
-                    rhs.index_axis_mut(AX0, 1)
-                        .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
-                    rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
-                } else {
-                    match left.specialize() {
-                        SingleBoundary::NotAKnot => {
-                            let dx0 = x[1] - x[0];
-                            let dx1 = x[2] - x[1];
-                            a_mid[0] = dx1;
-                            let d = x[2] - x[0];
-                            a_up[0] = d;
-                            let tmp1 = (dx0 + two * d) * dx1;
-                            Zip::from(rhs.index_axis_mut(AX0, 0))
-                                .and(data.index_axis(AX0, 0))
-                                .and(data.index_axis(AX0, 1))
-                                .and(data.index_axis(AX0, 2))
-                                .for_each(|b, &y0, &y1, &y2| {
-                                    *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1)
-                                        / d;
-                                });
-                        }
-                        SingleBoundary::Natural => unreachable!(),
-                        SingleBoundary::Clamped => unreachable!(),
-                        SingleBoundary::FirstDeriv(deriv) => todo!(),
-                        SingleBoundary::SecondDeriv(deriv) => {
-                            let x_0 = x[0];
-                            let x_1 = x[1];
-                            a_up[0] = x_1 - x_0;
-                            a_mid[0] = two * (x_1 - x_0);
-                            let rhs_0 = rhs.index_axis_mut(AX0, 0);
-                            let data_0 = data.index_axis(AX0, 0);
-                            let data_1 = data.index_axis(AX0, 1);
-                            Zip::from(rhs_0).and(data_0).and(data_1).for_each(
-                                |rhs_0, &y_0, &y_1| {
-                                    *rhs_0 = three * (y_1 - y_0);
-                                },
-                            );
-                        }
-                    };
-                    match right.specialize() {
-                        SingleBoundary::NotAKnot => {
-                            let dx_1 = x[len - 1] - x[len - 2];
-                            let dx_2 = x[len - 2] - x[len - 3];
-                            a_mid[len - 1] = dx_1;
-                            let d = x[len - 1] - x[len - 3];
-                            a_low[len - 1] = d;
-                            let tmp1 = (two * d + dx_1) * dx_2;
-                            Zip::from(rhs.index_axis_mut(AX0, len - 1))
-                                .and(data.index_axis(AX0, len - 1))
-                                .and(data.index_axis(AX0, len - 2))
-                                .and(data.index_axis(AX0, len - 3))
-                                .for_each(|b, &y_1, &y_2, &y_3| {
-                                    *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2
-                                        + tmp1 * (y_1 - y_2) / dx_1)
-                                        / d;
-                                });
-                        }
-                        SingleBoundary::Natural => unreachable!(),
-                        SingleBoundary::Clamped => unreachable!(),
-                        SingleBoundary::FirstDeriv(_) => todo!(),
-                        SingleBoundary::SecondDeriv(deriv) => {
-                            // x_n and xn-1
-                            let x_n = x[len - 1];
-                            let x_n1 = x[len - 2];
-                            a_mid[len - 1] = two * (x_n - x_n1);
-                            a_low[len - 1] = x_n - x_n1;
-                            let rhs_n = rhs.index_axis_mut(AX0, len - 1);
-                            let data_n = data.index_axis(AX0, len - 1);
-                            let data_n1 = data.index_axis(AX0, len - 2);
-                            Zip::from(rhs_n).and(data_n).and(data_n1).for_each(
-                                |rhs_n, &y_n, &y_n1| {
-                                    *rhs_n = three * (y_n - y_n1);
-                                },
-                            );
-                        }
-                    };
+                rhs.index_axis_mut(AX0, 0).assign(&(&slope0 * two));
+                rhs.index_axis_mut(AX0, 1)
+                    .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
+                rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
+            },
+            (RowBoundary::Mixed { left, right }, _) => {
+                match left.specialize() {
+                    SingleBoundary::NotAKnot => {
+                        let dx0 = x[1] - x[0];
+                        let dx1 = x[2] - x[1];
+                        a_mid[0] = dx1;
+                        let d = x[2] - x[0];
+                        a_up[0] = d;
+                        let tmp1 = (dx0 + two * d) * dx1;
+                        Zip::from(rhs.index_axis_mut(AX0, 0))
+                            .and(data.index_axis(AX0, 0))
+                            .and(data.index_axis(AX0, 1))
+                            .and(data.index_axis(AX0, 2))
+                            .for_each(|b, &y0, &y1, &y2| {
+                                *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1) / d;
+                            });
+                    }
+                    SingleBoundary::Natural => unreachable!(),
+                    SingleBoundary::Clamped => unreachable!(),
+                    SingleBoundary::FirstDeriv(deriv) => todo!(),
+                    SingleBoundary::SecondDeriv(deriv) => {
+                        let x_0 = x[0];
+                        let x_1 = x[1];
+                        a_up[0] = x_1 - x_0;
+                        a_mid[0] = two * (x_1 - x_0);
+                        let rhs_0 = rhs.index_axis_mut(AX0, 0);
+                        let data_0 = data.index_axis(AX0, 0);
+                        let data_1 = data.index_axis(AX0, 1);
+                        Zip::from(rhs_0)
+                            .and(data_0)
+                            .and(data_1)
+                            .for_each(|rhs_0, &y_0, &y_1| {
+                                *rhs_0 = three * (y_1 - y_0);
+                            });
+                    }
+                };
+                match right.specialize() {
+                    SingleBoundary::NotAKnot => {
+                        let dx_1 = x[len - 1] - x[len - 2];
+                        let dx_2 = x[len - 2] - x[len - 3];
+                        a_mid[len - 1] = dx_1;
+                        let d = x[len - 1] - x[len - 3];
+                        a_low[len - 1] = d;
+                        let tmp1 = (two * d + dx_1) * dx_2;
+                        Zip::from(rhs.index_axis_mut(AX0, len - 1))
+                            .and(data.index_axis(AX0, len - 1))
+                            .and(data.index_axis(AX0, len - 2))
+                            .and(data.index_axis(AX0, len - 3))
+                            .for_each(|b, &y_1, &y_2, &y_3| {
+                                *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2
+                                    + tmp1 * (y_1 - y_2) / dx_1)
+                                    / d;
+                            });
+                    }
+                    SingleBoundary::Natural => unreachable!(),
+                    SingleBoundary::Clamped => unreachable!(),
+                    SingleBoundary::FirstDeriv(_) => todo!(),
+                    SingleBoundary::SecondDeriv(deriv) => {
+                        // x_n and xn-1
+                        let x_n = x[len - 1];
+                        let x_n1 = x[len - 2];
+                        a_mid[len - 1] = two * (x_n - x_n1);
+                        a_low[len - 1] = x_n - x_n1;
+                        let rhs_n = rhs.index_axis_mut(AX0, len - 1);
+                        let data_n = data.index_axis(AX0, len - 1);
+                        let data_n1 = data.index_axis(AX0, len - 2);
+                        Zip::from(rhs_n)
+                            .and(data_n)
+                            .and(data_n1)
+                            .for_each(|rhs_n, &y_n, &y_n1| {
+                                *rhs_n = three * (y_n - y_n1);
+                            });
+                    }
                 };
             }
         }
