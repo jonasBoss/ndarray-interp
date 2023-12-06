@@ -6,11 +6,8 @@ use num_traits::Num;
 use super::Interp1D;
 use crate::{BuilderError, InterpolateError};
 
-mod cubic_spline;
-mod linear;
-
-pub use cubic_spline::{BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary};
-pub use linear::Linear;
+pub mod cubic_spline;
+pub mod linear;
 
 pub trait Interp1DStrategyBuilder<Sd, Sx, D>
 where

@@ -1,8 +1,9 @@
 use approx::assert_relative_eq;
 use ndarray::{array, Array1};
-use ndarray_interp::interp1d::{
-    BoundaryCondition, CubicSpline, Interp1D, Interp1DBuilder, RowBoundary, SingleBoundary,
+use ndarray_interp::interp1d::cubic_spline::{
+    BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary,
 };
+use ndarray_interp::interp1d::{Interp1D, Interp1DBuilder};
 use ndarray_interp::{BuilderError, InterpolateError};
 
 #[test]
@@ -202,7 +203,7 @@ fn multidim_multi_bounds() {
         }
     ],];
     let strat = CubicSpline::new().boundary(BoundaryCondition::Individual(boundaries));
-    let interpolator = Interp1DBuilder::new(y)
+    let _interpolator = Interp1DBuilder::new(y)
         .x(x)
         .strategy(strat)
         .build()
