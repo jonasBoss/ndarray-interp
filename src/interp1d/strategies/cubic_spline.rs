@@ -52,6 +52,7 @@ impl<T> SplineNum for T where
 /// ```
 /// # use ndarray_interp::*;
 /// # use ndarray_interp::interp1d::*;
+///  # use ndarray_interp::interp1d::cubic_spline::*;
 /// # use ndarray::*;
 /// # use approx::*;
 ///
@@ -97,6 +98,7 @@ pub struct CubicSpline<T, D: Dimension> {
 /// ``` rust
 /// # use ndarray_interp::*;
 /// # use ndarray_interp::interp1d::*;
+/// # use ndarray_interp::interp1d::cubic_spline::*;
 /// # use ndarray::*;
 /// # use approx::*;
 ///

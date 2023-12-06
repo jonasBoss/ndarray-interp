@@ -10,7 +10,7 @@
 //!
 //! # Strategies
 //!  - [`Linear`] Linear interpolation strategy
-//!  - [`CubicSpline`] Cubic spline interpolation strategy
+//!  - [`cubic_spline`] Cubic spline interpolation strategy
 
 use std::{any::TypeId, fmt::Debug, ops::Sub};
 
@@ -30,10 +30,14 @@ use crate::{
 mod aliases;
 mod strategies;
 pub use aliases::*;
-pub use strategies::{
-    BoundaryCondition, CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear, RowBoundary,
-    SingleBoundary,
-};
+pub use strategies::linear::Linear;
+pub use strategies::{Interp1DStrategy, Interp1DStrategyBuilder};
+
+pub mod cubic_spline {
+    pub use super::strategies::cubic_spline::{
+        BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary,
+    };
+}
 
 /// One dimensional interpolator
 #[derive(Debug)]
