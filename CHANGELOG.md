@@ -1,3 +1,12 @@
+# 0.5.0
+ - `QubicSpline` changes
+  - Move `QubicSpline` interpolator to `interp1d::cubic_spline` module
+  - add extrapolation
+  - add not-a-knot boundary condition
+  - add clamped boundary condition
+  - make not-a-knot boundary condition the default
+  - allow any first or second derivative as boundary condition
+
 # 0.4.1
  - major performance improvement for `interp_scalar()` methods ~-50%
  - keywords and categorys in crate metadata
