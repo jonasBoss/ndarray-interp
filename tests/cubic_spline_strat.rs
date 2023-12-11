@@ -1,5 +1,5 @@
 use approx::assert_relative_eq;
-use ndarray::{array, Array1};
+use ndarray::{array, stack, Array1, Axis};
 use ndarray_interp::interp1d::cubic_spline::{
     BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary,
 };
@@ -202,10 +202,54 @@ fn multidim_multi_bounds() {
             right: SingleBoundary::FirstDeriv(0.5)
         }
     ],];
-    let strat = CubicSpline::new().boundary(BoundaryCondition::Individual(boundaries));
-    let _interpolator = Interp1DBuilder::new(y)
+    let strat = CubicSpline::new()
+        .boundary(BoundaryCondition::Individual(boundaries))
+        .extrapolate(true);
+    let interp = Interp1DBuilder::new(y)
         .x(x)
         .strategy(strat)
         .build()
         .unwrap();
+
+    let query = Array1::linspace(-2.0, 4.0, 15);
+    let res = interp.interp_array(&query).unwrap();
+
+    let expect = stack![
+        Axis(1),
+        [
+            1.,
+            0.85787172,
+            0.59766764,
+            0.30794461,
+            0.07725948,
+            -0.00655977,
+            0.10058309,
+            0.375,
+            0.78717201,
+            1.30758017,
+            1.90670554,
+            2.55502915,
+            3.22303207,
+            3.88119534,
+            4.5
+        ],
+        [
+            -1.13194444,
+            0.02834467,
+            0.81235828,
+            1.27749433,
+            1.48115079,
+            1.48072562,
+            1.33361678,
+            1.09722222,
+            0.82893991,
+            0.5861678,
+            0.42630385,
+            0.40674603,
+            0.58489229,
+            1.01814059,
+            1.76388889,
+        ]
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
