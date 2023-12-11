@@ -253,3 +253,159 @@ fn multidim_multi_bounds() {
     ];
     assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
+
+#[test]
+fn extrapolate_clamped() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
+    let interp = Interp1D::builder(data)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Clamped),
+        )
+        .build()
+        .unwrap();
+    let q = Array1::linspace(-3.0, 15.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+
+    // values from scipy.interpolate.QubicSpline with bc_type="clamped"
+    let expect = array![
+        41.28722497,
+        23.28738691,
+        11.50757146,
+        4.70085655,
+        1.6203201,
+        1.01904002,
+        1.65009422,
+        2.30659337,
+        2.50031574,
+        2.43169729,
+        2.62693014,
+        3.01102652,
+        2.60307096,
+        1.96191635,
+        1.64574608,
+        -0.21831221,
+        -2.03751124,
+        0.35279783,
+        3.70463099,
+        4.84190082,
+        5.38534268,
+        6.37212173,
+        7.69341241,
+        7.7404559,
+        4.5896631,
+        -3.68255511,
+        -18.99978784,
+        -43.28562421,
+        -78.46365334,
+        -126.45746433
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn extrapolate_deriv1() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
+    let interp = Interp1D::builder(data)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Individual(array![RowBoundary::Mixed {
+                    left: SingleBoundary::FirstDeriv(-0.1),
+                    right: SingleBoundary::FirstDeriv(-0.5)
+                },])),
+        )
+        .build()
+        .unwrap();
+    let q = Array1::linspace(-3.0, 15.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+
+    // values from scipy.interpolate.QubicSpline with bc_type=((1,-0.1),(1,-0.5))
+    let expect = array![
+        45.12263976,
+        25.49190916,
+        12.61728065,
+        5.14680023,
+        1.72851392,
+        1.01046772,
+        1.64070764,
+        2.31111841,
+        2.50057718,
+        2.43070534,
+        2.62719459,
+        3.01112854,
+        2.60301259,
+        1.96191065,
+        1.64564649,
+        -0.2180452,
+        -2.03735486,
+        0.35120098,
+        3.70664967,
+        4.84689904,
+        5.36679077,
+        6.37700245,
+        7.77785832,
+        7.52893643,
+        3.18149421,
+        -7.71321086,
+        -27.60392136,
+        -58.93937981,
+        -104.16832878,
+        -165.7395108
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn extrapolate_deriv2() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 8.0];
+    let interp = Interp1D::builder(data)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Individual(array![RowBoundary::Mixed {
+                    left: SingleBoundary::SecondDeriv(-0.1),
+                    right: SingleBoundary::SecondDeriv(-0.5)
+                },])),
+        )
+        .build()
+        .unwrap();
+    let q = Array1::linspace(-3.0, 15.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+
+    // values from scipy.interpolate.QubicSpline with bc_type=((2,-0.1),(2,-0.5))
+    let expect = array![
+        -1.20835424,
+        -1.1382612,
+        -0.78778322,
+        -0.24011435,
+        0.42155137,
+        1.11401989,
+        1.75409718,
+        2.25645344,
+        2.49741809,
+        2.44270565,
+        2.62397325,
+        3.00984762,
+        2.60393207,
+        1.96186855,
+        1.645952,
+        -0.21912456,
+        -2.03800922,
+        0.35793208,
+        3.69812853,
+        4.82579579,
+        5.4451242,
+        6.35639393,
+        7.42129049,
+        8.42206522,
+        9.12740733,
+        9.306006,
+        8.72655042,
+        7.15772979,
+        4.36823329,
+        0.12675012
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
