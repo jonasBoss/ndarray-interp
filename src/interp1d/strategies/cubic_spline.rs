@@ -87,11 +87,19 @@ pub struct CubicSpline<T, D: Dimension> {
 /// Boundary conditions for the whole dataset
 ///
 /// The boundary condition is structured in three hirarchic enum's:
-///  - This: The toplevel boundary applys to the whole dataset
+///  - [`BoundaryCondition`] The toplevel boundary applys to the whole dataset
 ///  - [`RowBoundary`] applys to a single row in the dataset
 ///  - [`SingleBoundary`] applys to an individual boundary of a single row
 ///
 /// the default is the [`NotAKnot`](BoundaryCondition::NotAKnot) boundary in each level
+///
+/// There are different possibilities for the boundary condition in each level:
+///  - [`NotAKnot`](BoundaryCondition::NotAKnot) - all levels
+///  - [`Natural`](BoundaryCondition::Natural) - all levels (same as `SecondDeriv(0.0)`)
+///  - [`Clamped`](BoundaryCondition::Clamped) - all levels (same as `FirstDeriv(0.0)`)
+///  - [`Periodic`](BoundaryCondition::Periodic) - not in [`SingleBoundary`]
+///  - [`FirstDeriv`](SingleBoundary::FirstDeriv) - only in [`SingleBoundary`]
+///  - [`SecondDeriv`](SingleBoundary::SecondDeriv) - only in [`SingleBoundary`]
 ///
 /// ## Example
 /// In a complex case all boundaries can be set individually:
