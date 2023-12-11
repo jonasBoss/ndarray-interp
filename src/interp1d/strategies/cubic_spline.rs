@@ -257,7 +257,7 @@ where
             extrapolate,
             boundary: _,
         } = self;
-        let (a, b) = self.calc_coefficients(x, data);
+        let (a, b) = self.calc_coefficients(x, data)?;
         Ok(CubicSplineStrategy { a, b, extrapolate })
     }
 }
@@ -272,7 +272,7 @@ where
         self,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, D>,
-    ) -> (Array<Sd::Elem, D>, Array<Sd::Elem, D>)
+    ) -> Result<(Array<Sd::Elem, D>, Array<Sd::Elem, D>), BuilderError>
     where
         Sd: Data<Elem = T>,
         Sx: Data<Elem = T>,
@@ -282,7 +282,7 @@ where
         let mut k = Array::zeros(dim.clone());
         let kv = k.view_mut();
         match self.boundary {
-            BoundaryCondition::Periodic => todo!(),
+            BoundaryCondition::Periodic => Self::solve_for_k(kv, x, data, RowBoundary::Periodic),
             BoundaryCondition::Natural => Self::solve_for_k(kv, x, data, RowBoundary::Natural),
             BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, RowBoundary::Clamped),
             BoundaryCondition::NotAKnot => Self::solve_for_k(kv, x, data, RowBoundary::NotAKnot),
@@ -315,7 +315,7 @@ where
                 })
         }
 
-        (c_a, c_b)
+        Ok((c_a, c_b))
     }
 
     fn solve_for_k_individual<Sx>(
