@@ -129,7 +129,7 @@ fn interp_builder_errors() {
         Interp1DBuilder::new(array![1, 2])
             .x(array![1, 2, 3])
             .build(),
-        Err(BuilderError::AxisLenght(_))
+        Err(BuilderError::ShapeError(_))
     ));
     assert!(matches!(
         Interp1DBuilder::new(array![1, 2, 3])

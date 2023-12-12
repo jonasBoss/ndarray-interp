@@ -290,25 +290,25 @@ fn builder_errors() {
         Interp2D::builder(array![[1, 2], [3, 4]])
             .x(array![1])
             .build(),
-        Err(BuilderError::AxisLenght(_))
+        Err(BuilderError::ShapeError(_))
     ));
     assert!(matches!(
         Interp2D::builder(array![[1, 2], [3, 4]])
             .x(array![1, 2, 3])
             .build(),
-        Err(BuilderError::AxisLenght(_))
+        Err(BuilderError::ShapeError(_))
     ));
     assert!(matches!(
         Interp2D::builder(array![[1, 2], [3, 4]])
             .y(array![1])
             .build(),
-        Err(BuilderError::AxisLenght(_))
+        Err(BuilderError::ShapeError(_))
     ));
     assert!(matches!(
         Interp2D::builder(array![[1, 2], [3, 4]])
             .y(array![1, 2, 3])
             .build(),
-        Err(BuilderError::AxisLenght(_))
+        Err(BuilderError::ShapeError(_))
     ));
     assert!(matches!(
         Interp2D::builder(array![[1, 2], [3, 4]])
