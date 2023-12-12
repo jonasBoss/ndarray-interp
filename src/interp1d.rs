@@ -451,7 +451,7 @@ where
         let Interp1DBuilder { x, data, strategy } = self;
 
         if data.ndim() < 1 {
-            return Err(DimensionError(
+            return Err(ShapeError(
                 "data dimension is 0, needs to be at least 1".into(),
             ));
         }
@@ -467,7 +467,7 @@ where
             ));
         }
         if x.len() != data.shape()[0] {
-            return Err(BuilderError::AxisLenght(format!(
+            return Err(BuilderError::ShapeError(format!(
                 "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
                 x.len(),
                 data.shape()[0],
