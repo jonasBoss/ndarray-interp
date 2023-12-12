@@ -339,7 +339,7 @@ where
                 .and(data.axis_iter(ax))
                 .and(boundary.axis_iter(ax))
                 .fold_while(Ok(()), |_, k, data, boundary| {
-                    Self::solve_for_k_individual(k, &x, data, boundary).map_or_else(
+                    Self::solve_for_k_individual(k, x, data, boundary).map_or_else(
                         |err| FoldWhile::Done(Err(err)),
                         |_| FoldWhile::Continue(Ok(())),
                     )
@@ -426,7 +426,16 @@ where
         // apply boundary conditions
         match (boundary.specialize(), len) {
             (RowBoundary::Periodic, _) => {
-                todo!()
+                let first = data.index_axis(AX0, 0);
+                let last = data.index_axis(AX0, len - 1);
+                if first != last {
+                    if data.ndim() == 1 {
+                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {:?}, last: {:?}", data.first().unwrap_or_else(||unreachable!()), data.last().unwrap_or_else(||unreachable!()))));
+                    } else {
+                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {first:?}, last: {last:?}")));
+                    }
+                }
+                todo!();
             }
             (RowBoundary::Clamped, _) => unreachable!(),
             (RowBoundary::Natural, _) => unreachable!(),

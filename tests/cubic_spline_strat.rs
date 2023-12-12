@@ -438,3 +438,25 @@ fn bounds_shape_error2() {
         .build()
         .unwrap();
 }
+
+#[test]
+#[should_panic(expected = "First: 1.0, last: 0.5")]
+fn periodic_wrong_values() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
+    let boundaries =
+        BoundaryCondition::Individual(array![[RowBoundary::Natural, RowBoundary::Periodic],]);
+    Interp1DBuilder::new(y)
+        .strategy(CubicSpline::new().boundary(boundaries))
+        .build()
+        .unwrap();
+}
+
+#[test]
+#[should_panic(expected = "First: [0.5, 1.0], shape=[2], strides=[1], layout=CFcf (0xf), const ndim=1, last: [3.0, 0.5]")]
+fn periodic_wrong_values2() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [0.5, 1.1],];
+    Interp1DBuilder::new(y)
+        .strategy(CubicSpline::new().boundary(BoundaryCondition::Periodic))
+        .build()
+        .unwrap();
+}
