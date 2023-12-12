@@ -409,3 +409,32 @@ fn extrapolate_deriv2() {
     ];
     assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
+
+#[test]
+#[should_panic(expected = "Expected: [1, 2], got: [1, 3]")]
+fn bounds_shape_error1() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
+    let boundaries = BoundaryCondition::Individual(array![[
+        RowBoundary::Natural,
+        RowBoundary::Periodic,
+        RowBoundary::NotAKnot
+    ],]);
+    Interp1DBuilder::new(y)
+        .strategy(CubicSpline::new().boundary(boundaries))
+        .build()
+        .unwrap();
+}
+
+#[test]
+#[should_panic(expected = "Expected: [1, 2], got: [2, 2]")]
+fn bounds_shape_error2() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
+    let boundaries = BoundaryCondition::Individual(array![
+        [RowBoundary::Natural, RowBoundary::NotAKnot],
+        [RowBoundary::Natural, RowBoundary::NotAKnot],
+    ]);
+    Interp1DBuilder::new(y)
+        .strategy(CubicSpline::new().boundary(boundaries))
+        .build()
+        .unwrap();
+}
