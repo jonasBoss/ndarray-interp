@@ -1,5 +1,8 @@
 # 0.5.0
- - `QubicSpline` changes
+ - update `BuilderError` 
+   - combine variants `DimensionError` and `AxisLenght` into `ShapeError`
+   - add `ValueError` variant
+ - update `QubicSpline` stragegie
    - Move `QubicSpline` interpolator to `interp1d::cubic_spline` module
    - add extrapolation
    - add not-a-knot boundary condition
