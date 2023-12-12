@@ -132,12 +132,10 @@ pub enum BuilderError {
     /// A interpolation axis is not strict monotonic rising
     #[error("{0}")]
     Monotonic(String),
-    /// The lengths of interpolation axis and the
-    /// corresponding data axis do not match
     #[error("{0}")]
-    AxisLenght(String),
+    ShapeError(String),
     #[error("{0}")]
-    DimensionError(String),
+    ValueError(String),
 }
 
 /// Errors during Interpolation
