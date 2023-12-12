@@ -287,8 +287,14 @@ where
             BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, RowBoundary::Clamped),
             BoundaryCondition::NotAKnot => Self::solve_for_k(kv, x, data, RowBoundary::NotAKnot),
             BoundaryCondition::Individual(bounds) => {
-                assert!(kv.raw_dim().remove_axis(AX0) == bounds.raw_dim().remove_axis(AX0)); // TODO: return error
-                assert!(bounds.raw_dim()[0] == 1); // TODO: return error
+                let mut bounds_shape = kv.raw_dim();
+                bounds_shape[0] = 1;
+                if bounds_shape != bounds.raw_dim() {
+                    return Err(BuilderError::ShapeError(format!(
+                        "Boundary conditions array has wrong shape. Expected: {bounds_shape:?}, got: {:?}",
+                        bounds.raw_dim()
+                    )));
+                }
                 Self::solve_for_k_individual(
                     kv.into_dyn(),
                     x,
