@@ -475,9 +475,7 @@ where
             strategy: stratgy_builder,
         } = self;
         if data.ndim() < 2 {
-            return Err(DimensionError(
-                "data dimension needs to be at least 2".into(),
-            ));
+            return Err(ShapeError("data dimension needs to be at least 2".into()));
         }
         if data.shape()[0] < Strat::MINIMUM_DATA_LENGHT {
             return Err(NotEnoughData(format!("The 0-dimension has not enough data for the chosen interpolation strategy. Provided: {}, Reqired: {}", data.shape()[0], Strat::MINIMUM_DATA_LENGHT)));
@@ -486,14 +484,14 @@ where
             return Err(NotEnoughData(format!("The 1-dimension has not enough data for the chosen interpolation strategy. Provided: {}, Reqired: {}", data.shape()[1], Strat::MINIMUM_DATA_LENGHT)));
         }
         if x.len() != data.shape()[0] {
-            return Err(AxisLenght(format!(
+            return Err(ShapeError(format!(
                 "Lenghts of x-axis and data-0-axis need to match. Got x: {}, data-0: {}",
                 x.len(),
                 data.shape()[0]
             )));
         }
         if y.len() != data.shape()[1] {
-            return Err(AxisLenght(format!(
+            return Err(ShapeError(format!(
                 "Lenghts of y-axis and data-1-axis need to match. Got y: {}, data-1: {}",
                 y.len(),
                 data.shape()[1]

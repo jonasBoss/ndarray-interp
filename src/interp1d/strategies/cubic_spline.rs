@@ -4,7 +4,8 @@ use std::{
 };
 
 use ndarray::{
-    s, Array, ArrayBase, ArrayViewMut, Axis, Data, Dimension, Ix1, RemoveAxis, ScalarOperand, Zip,
+    s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, FoldWhile, Ix1,
+    IxDyn, RemoveAxis, ScalarOperand, Zip,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -14,45 +15,23 @@ use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
-/// The CubicSpline 1d interpolation Strategy
-///
-/// # Example
-/// From [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation#Example)
-/// ```
-/// # use ndarray_interp::*;
-/// # use ndarray_interp::interp1d::*;
-/// # use ndarray::*;
-/// # use approx::*;
-///
-/// let y = array![ 0.5, 0.0, 3.0];
-/// let x = array![-1.0, 0.0, 3.0];
-/// let query = Array::linspace(-1.0, 3.0, 10);
-/// let interpolator = Interp1DBuilder::new(y)
-///     .strategy(CubicSpline)
-///     .x(x)
-///     .build().unwrap();
-///
-/// let result = interpolator.interp_array(&query).unwrap();
-/// let expect = array![
-///     0.5,
-///     0.2109053497942387,
-///     0.020576131687242816,
-///     0.01851851851851849,
-///     0.21364883401920443,
-///     0.5733882030178327,
-///     1.0648148148148144,
-///     1.6550068587105617,
-///     2.3110425240054866,
-///     3.0
-/// ];
-/// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
-/// ```
-#[derive(Debug)]
-pub struct CubicSpline;
-impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline
-where
-    Sd: Data,
-    Sd::Elem: Debug
+pub trait SplineNum:
+    Debug
+    + Num
+    + Copy
+    + PartialOrd
+    + Sub
+    + SubAssign
+    + NumCast
+    + Add
+    + Pow<Self, Output = Self>
+    + ScalarOperand
+    + Send
+{
+}
+
+impl<T> SplineNum for T where
+    T: Debug
         + Num
         + Copy
         + PartialOrd
@@ -60,9 +39,206 @@ where
         + SubAssign
         + NumCast
         + Add
-        + Pow<Sd::Elem, Output = Sd::Elem>
+        + Pow<Self, Output = Self>
         + ScalarOperand
-        + Send,
+        + Send
+{
+}
+
+/// The CubicSpline 1d interpolation Strategy
+///
+/// # Example
+/// From [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation#Example)
+/// ```
+/// # use ndarray_interp::*;
+/// # use ndarray_interp::interp1d::*;
+///  # use ndarray_interp::interp1d::cubic_spline::*;
+/// # use ndarray::*;
+/// # use approx::*;
+///
+/// let y = array![ 0.5, 0.0, 3.0];
+/// let x = array![-1.0, 0.0, 3.0];
+/// let query = Array::linspace(-1.0, 3.0, 10);
+/// let interpolator = Interp1DBuilder::new(y)
+///     .strategy(CubicSpline::new())
+///     .x(x)
+///     .build().unwrap();
+///
+/// let result = interpolator.interp_array(&query).unwrap();
+/// let expect = array![
+///     0.5,
+///     0.1851851851851852,
+///     0.01851851851851853,
+///     -5.551115123125783e-17,
+///     0.12962962962962965,
+///     0.40740740740740755,
+///     0.8333333333333331,
+///     1.407407407407407,
+///     2.1296296296296293, 3.0
+/// ];
+/// # assert_abs_diff_eq!(result, expect, epsilon=f64::EPSILON);
+/// ```
+#[derive(Debug)]
+pub struct CubicSpline<T, D: Dimension> {
+    extrapolate: bool,
+    boundary: BoundaryCondition<T, D>,
+}
+
+/// Boundary conditions for the whole dataset
+///
+/// The boundary condition is structured in three hirarchic enum's:
+///  - [`BoundaryCondition`] The toplevel boundary applys to the whole dataset
+///  - [`RowBoundary`] applys to a single row in the dataset
+///  - [`SingleBoundary`] applys to an individual boundary of a single row
+///
+/// the default is the [`NotAKnot`](BoundaryCondition::NotAKnot) boundary in each level
+///
+/// There are different possibilities for the boundary condition in each level:
+///  - [`NotAKnot`](BoundaryCondition::NotAKnot) - all levels
+///  - [`Natural`](BoundaryCondition::Natural) - all levels (same as `SecondDeriv(0.0)`)
+///  - [`Clamped`](BoundaryCondition::Clamped) - all levels (same as `FirstDeriv(0.0)`)
+///  - [`Periodic`](BoundaryCondition::Periodic) - not in [`SingleBoundary`]
+///  - [`FirstDeriv`](SingleBoundary::FirstDeriv) - only in [`SingleBoundary`]
+///  - [`SecondDeriv`](SingleBoundary::SecondDeriv) - only in [`SingleBoundary`]
+///
+/// ## Example
+/// In a complex case all boundaries can be set individually:
+/// ``` rust
+/// # use ndarray_interp::*;
+/// # use ndarray_interp::interp1d::*;
+/// # use ndarray_interp::interp1d::cubic_spline::*;
+/// # use ndarray::*;
+/// # use approx::*;
+///
+/// let y = array![
+///     [0.5, 1.0],
+///     [0.0, 1.5],
+///     [3.0, 0.5],
+/// ];
+/// let x = array![-1.0, 0.0, 3.0];
+///
+/// // first data column: natural
+/// // second data column top: NotAKnot
+/// // second data column bottom: first derivative == 0.5
+/// let boundaries = array![
+///     [
+///         RowBoundary::Natural,
+///         RowBoundary::Mixed { left: SingleBoundary::NotAKnot, right: SingleBoundary::FirstDeriv(0.5)}
+///     ],
+/// ];
+/// let strat = CubicSpline::new().boundary(BoundaryCondition::Individual(boundaries));
+/// let interpolator = Interp1DBuilder::new(y)
+///     .x(x)
+///     .strategy(strat)
+///     .build().unwrap();
+///
+/// ```
+#[derive(Debug, PartialEq, Eq)]
+pub enum BoundaryCondition<T, D: Dimension> {
+    /// Not a knot boundary. The first and second segment at a curve end are the same polynomial.
+    NotAKnot,
+    /// Natural boundary. The second derivative at the curve end is 0
+    Natural,
+    /// Clamped boundary. The first derivative at the curve end is 0
+    Clamped,
+    /// Periodic spline.
+    /// The interpolated functions is assumed to be periodic.
+    /// The first and last element in the data must be equal.
+    Periodic,
+    /// Set individual boundary conditions for each row in the data
+    /// and/or individual conditions for the left and right boundary
+    Individual(Array<RowBoundary<T>, D>),
+}
+
+impl<T, D: Dimension> Default for BoundaryCondition<T, D> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+/// Boundary condition for a single data row
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RowBoundary<T> {
+    /// ![`BoundaryCondition::NotAKnot`]
+    NotAKnot,
+    /// ![`BoundaryCondition::Natural`]
+    Natural,
+    /// ![`BoundaryCondition::Clamped`]
+    Clamped,
+    /// ![`BoundaryCondition::Periodic`]
+    Periodic,
+    /// Set individual boundary conditions at the left and right end of the curve
+    Mixed {
+        left: SingleBoundary<T>,
+        right: SingleBoundary<T>,
+    },
+}
+
+impl<T: SplineNum> RowBoundary<T> {
+    fn specialize(self) -> Self {
+        use SingleBoundary::*;
+        match self {
+            RowBoundary::Natural => Self::Mixed {
+                left: Natural,
+                right: Natural,
+            },
+            RowBoundary::NotAKnot => Self::Mixed {
+                left: NotAKnot,
+                right: NotAKnot,
+            },
+            RowBoundary::Clamped => Self::Mixed {
+                left: Clamped,
+                right: Clamped,
+            },
+            _ => self,
+        }
+    }
+}
+
+impl<T: SplineNum> Default for RowBoundary<T> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+/// Boundary condition for a single boundary (one side of one data row)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SingleBoundary<T> {
+    /// ![`BoundaryCondition::NotAKnot`]
+    NotAKnot,
+    /// This ist the same as `SingleBoundary::SecondDeriv(0.0)`
+    /// ![`BoundaryCondition::Natural`]
+    Natural,
+    /// This ist the same as `SingleBoundary::FirstDeriv(0.0)`
+    /// ![`BoundaryCondition::Clamped`]
+    Clamped,
+    /// Set a value for the first derivative at the curve end
+    FirstDeriv(T),
+    /// Set a value for the second derivative at the curve end
+    SecondDeriv(T),
+}
+
+impl<T: SplineNum> SingleBoundary<T> {
+    fn specialize(self) -> Self {
+        use SingleBoundary::*;
+        match self {
+            SingleBoundary::Natural => SecondDeriv(cast(0.0).unwrap_or_else(|| unimplemented!())),
+            SingleBoundary::Clamped => FirstDeriv(cast(0.0).unwrap_or_else(|| unimplemented!())),
+            _ => self,
+        }
+    }
+}
+
+impl<T: SplineNum> Default for SingleBoundary<T> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline<Sd::Elem, D>
+where
+    Sd: Data,
+    Sd::Elem: SplineNum,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
@@ -77,43 +253,131 @@ where
     where
         Sx2: Data<Elem = Sd::Elem>,
     {
-        let (a, b) = self.calc_coefficients(x, data);
-        Ok(CubicSplineStrategy { a, b })
+        let Self {
+            extrapolate,
+            boundary: _,
+        } = self;
+        let (a, b) = self.calc_coefficients(x, data)?;
+        Ok(CubicSplineStrategy { a, b, extrapolate })
     }
 }
 
-impl CubicSpline {
-    fn calc_coefficients<Sd, Sx, D>(
+impl<T, D> CubicSpline<T, D>
+where
+    D: Dimension + RemoveAxis,
+    T: SplineNum,
+{
+    /// Calculate the coefficients `a` and `b`
+    fn calc_coefficients<Sd, Sx>(
         self,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, D>,
-    ) -> (Array<Sd::Elem, D>, Array<Sd::Elem, D>)
+    ) -> Result<(Array<Sd::Elem, D>, Array<Sd::Elem, D>), BuilderError>
     where
-        Sd: Data,
-        Sd::Elem: Num
-            + Copy
-            + Sub
-            + SubAssign
-            + NumCast
-            + Add
-            + Pow<Sd::Elem, Output = Sd::Elem>
-            + ScalarOperand
-            + Debug,
-        Sx: Data<Elem = Sd::Elem>,
-        D: Dimension + RemoveAxis,
+        Sd: Data<Elem = T>,
+        Sx: Data<Elem = T>,
     {
         let dim = data.raw_dim();
         let len = dim[0];
+        let mut k = Array::zeros(dim.clone());
+        let kv = k.view_mut();
+        match self.boundary {
+            BoundaryCondition::Periodic => Self::solve_for_k(kv, x, data, RowBoundary::Periodic),
+            BoundaryCondition::Natural => Self::solve_for_k(kv, x, data, RowBoundary::Natural),
+            BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, RowBoundary::Clamped),
+            BoundaryCondition::NotAKnot => Self::solve_for_k(kv, x, data, RowBoundary::NotAKnot),
+            BoundaryCondition::Individual(bounds) => {
+                let mut bounds_shape = kv.raw_dim();
+                bounds_shape[0] = 1;
+                if bounds_shape != bounds.raw_dim() {
+                    return Err(BuilderError::ShapeError(format!(
+                        "Boundary conditions array has wrong shape. Expected: {bounds_shape:?}, got: {:?}",
+                        bounds.raw_dim()
+                    )));
+                }
+                Self::solve_for_k_individual(
+                    kv.into_dyn(),
+                    x,
+                    data.view().into_dyn(),
+                    bounds.view().into_dyn(),
+                )
+            }
+        }?;
+
         let mut a_b_dim = data.raw_dim();
         a_b_dim[0] -= 1;
+        let mut c_a = Array::zeros(a_b_dim.clone());
+        let mut c_b = Array::zeros(a_b_dim);
+        for index in 0..len - 1 {
+            Zip::from(c_a.index_axis_mut(AX0, index))
+                .and(c_b.index_axis_mut(AX0, index))
+                .and(k.index_axis(AX0, index))
+                .and(k.index_axis(AX0, index + 1))
+                .and(data.index_axis(AX0, index))
+                .and(data.index_axis(AX0, index + 1))
+                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
+                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
+                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
+                })
+        }
+
+        Ok((c_a, c_b))
+    }
+
+    fn solve_for_k_individual<Sx>(
+        mut k: ArrayViewMut<T, IxDyn>,
+        x: &ArrayBase<Sx, Ix1>,
+        data: ArrayView<T, IxDyn>,
+        boundary: ArrayView<RowBoundary<T>, IxDyn>,
+    ) -> Result<(), BuilderError>
+    where
+        Sx: Data<Elem = T>,
+    {
+        if k.ndim() > 1 {
+            let ax = Axis(k.ndim() - 1);
+            Zip::from(k.axis_iter_mut(ax))
+                .and(data.axis_iter(ax))
+                .and(boundary.axis_iter(ax))
+                .fold_while(Ok(()), |_, k, data, boundary| {
+                    Self::solve_for_k_individual(k, &x, data, boundary).map_or_else(
+                        |err| FoldWhile::Done(Err(err)),
+                        |_| FoldWhile::Continue(Ok(())),
+                    )
+                })
+                .into_inner()
+        } else {
+            Self::solve_for_k(
+                k,
+                x,
+                &data,
+                boundary.first().cloned().unwrap_or_else(|| unreachable!()),
+            )
+        }
+    }
+
+    /// solves the linear equation `A * k = rhs` with the [`RowBoundary`] used for
+    /// each row in the data
+    ///  
+    /// **returns** k
+    fn solve_for_k<Sd, Sx, _D>(
+        k: ArrayViewMut<T, _D>,
+        x: &ArrayBase<Sx, Ix1>,
+        data: &ArrayBase<Sd, _D>,
+        boundary: RowBoundary<T>,
+    ) -> Result<(), BuilderError>
+    where
+        _D: Dimension + RemoveAxis,
+        Sd: Data<Elem = T>,
+        Sx: Data<Elem = T>,
+    {
+        let dim = data.raw_dim();
+        let len = dim[0];
 
         /*
          * Calculate the coefficients c_a and c_b for the cubic spline the method is outlined on
          * https://en.wikipedia.org/wiki/Spline_interpolation#Example
          *
          * This requires solving the Linear equation A * k = rhs
-         * The Thomas algorithm is used, because the matrix A will be tridiagonal and diagonally dominant.
-         * (https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm)
          */
 
         // upper, middle and lower diagonal of A
@@ -121,79 +385,180 @@ impl CubicSpline {
         let mut a_mid = Array::zeros(len);
         let mut a_low = Array::zeros(len);
 
-        let one: Sd::Elem = cast(1.0).unwrap_or_else(|| unimplemented!());
-        let two: Sd::Elem = cast(2.0).unwrap_or_else(|| unimplemented!());
-        let three: Sd::Elem = cast(3.0).unwrap_or_else(|| unimplemented!());
+        let zero: T = cast(0.0).unwrap_or_else(|| unimplemented!());
+        let one: T = cast(1.0).unwrap_or_else(|| unimplemented!());
+        let two: T = cast(2.0).unwrap_or_else(|| unimplemented!());
+        let three: T = cast(3.0).unwrap_or_else(|| unimplemented!());
 
         Zip::from(a_up.slice_mut(s![1..-1]))
             .and(a_mid.slice_mut(s![1..-1]))
             .and(a_low.slice_mut(s![1..-1]))
             .and(x.windows(3))
             .for_each(|a_up, a_mid, a_low, x| {
-                let x_left = x[0];
-                let x_mid = x[1];
-                let x_right = x[2];
+                let dxn = x[2] - x[1];
+                let dxn_1 = x[1] - x[0];
 
-                *a_up = one / (x_right - x_mid);
-                *a_mid = two / (x_mid - x_left) + two / (x_right - x_mid);
-                *a_low = one / (x_mid - x_left);
+                *a_up = dxn_1;
+                *a_mid = two * (dxn + dxn_1);
+                *a_low = dxn;
             });
 
-        let x_0 = x[0];
-        let x_1 = x[1];
-
-        a_up[0] = one / (x_1 - x_0);
-        a_mid[0] = two / (x_1 - x_0);
-
-        // x_n and xn-1
-        let x_n = x[len - 1];
-        let x_n1 = x[len - 2];
-        a_mid[len - 1] = two / (x_n - x_n1);
-        a_low[len - 1] = one / (x_n - x_n1);
-
         // RHS vector
-        let mut rhs: Array<Sd::Elem, D> = Array::zeros(dim.clone());
+        let mut rhs = Array::zeros(dim.clone());
 
         for i in 1..len - 1 {
             let rhs = rhs.index_axis_mut(AX0, i);
             let y_left = data.index_axis(AX0, i - 1);
             let y_mid = data.index_axis(AX0, i);
             let y_right = data.index_axis(AX0, i + 1);
-            let x_left = x[i - 1];
-            let x_mid = x[i];
-            let x_right = x[i + 1];
+
+            let dxn = x[i + 1] - x[i]; // dx(n)
+            let dxn_1 = x[i] - x[i - 1]; // dx(n-1)
+
             Zip::from(y_left).and(y_mid).and(y_right).map_assign_into(
                 rhs,
                 |&y_left, &y_mid, &y_right| {
-                    three
-                        * ((y_mid - y_left) / (x_mid - x_left).pow(two)
-                            + (y_right - y_mid) / (x_right - x_mid).pow(two))
+                    three * (dxn * (y_mid - y_left) / dxn_1 + dxn_1 * (y_right - y_mid) / dxn)
                 },
             );
         }
 
-        let rhs_0 = rhs.index_axis_mut(AX0, 0);
-        let data_0 = data.index_axis(AX0, 0);
-        let data_1 = data.index_axis(AX0, 1);
-        Zip::from(rhs_0)
-            .and(data_0)
-            .and(data_1)
-            .for_each(|rhs_0, &y_0, &y_1| {
-                *rhs_0 = three * (y_1 - y_0) / (x_1 - x_0).pow(two);
-            });
+        // apply boundary conditions
+        match (boundary.specialize(), len) {
+            (RowBoundary::Periodic, _) => {
+                todo!()
+            }
+            (RowBoundary::Clamped, _) => unreachable!(),
+            (RowBoundary::Natural, _) => unreachable!(),
+            (RowBoundary::NotAKnot, _) => unreachable!(),
+            (
+                RowBoundary::Mixed {
+                    left: SingleBoundary::NotAKnot,
+                    right: SingleBoundary::NotAKnot,
+                },
+                3,
+            ) => {
+                // We handle this case by constructing a parabola passing through given points.
+                let dx0 = x[1] - x[0];
+                let dx1 = x[2] - x[1];
 
-        let rhs_n = rhs.index_axis_mut(AX0, len - 1);
-        let data_n = data.index_axis(AX0, len - 1);
-        let data_n1 = data.index_axis(AX0, len - 2);
-        Zip::from(rhs_n)
-            .and(data_n)
-            .and(data_n1)
-            .for_each(|rhs_n, &y_n, &y_n1| {
-                *rhs_n = three * (y_n - y_n1) / (x_n - x_n1).pow(two);
-            });
+                let y0 = data.index_axis(AX0, 0);
+                let y1 = data.index_axis(AX0, 1);
+                let y2 = data.index_axis(AX0, 2);
+                let slope0 = (y1.to_owned() - y0) / dx0;
+                let slope1 = (y2.to_owned() - y1) / dx1;
 
-        // now solving With Thomas algorithm
+                a_mid[0] = one; // [0, 0]
+                a_up[0] = one; // [0, 1]
+                a_low[1] = dx1; // [1, 0]
+                a_mid[1] = two * (dx0 + dx1); // [1, 1]
+                a_up[1] = dx0; // [1, 2]
+                a_low[2] = one; // [2, 1]
+                a_mid[2] = one; // [2, 2]
 
+                rhs.index_axis_mut(AX0, 0).assign(&(&slope0 * two));
+                rhs.index_axis_mut(AX0, 1)
+                    .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
+                rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
+            }
+            (RowBoundary::Mixed { left, right }, _) => {
+                match left.specialize() {
+                    SingleBoundary::NotAKnot => {
+                        let dx0 = x[1] - x[0];
+                        let dx1 = x[2] - x[1];
+                        a_mid[0] = dx1;
+                        let d = x[2] - x[0];
+                        a_up[0] = d;
+                        let tmp1 = (dx0 + two * d) * dx1;
+                        Zip::from(rhs.index_axis_mut(AX0, 0))
+                            .and(data.index_axis(AX0, 0))
+                            .and(data.index_axis(AX0, 1))
+                            .and(data.index_axis(AX0, 2))
+                            .for_each(|b, &y0, &y1, &y2| {
+                                *b = (tmp1 * (y1 - y0) / dx0 + dx0.pow(two) * (y2 - y1) / dx1) / d;
+                            });
+                    }
+                    SingleBoundary::Natural => unreachable!(),
+                    SingleBoundary::Clamped => unreachable!(),
+                    SingleBoundary::FirstDeriv(deriv) => {
+                        a_mid[0] = one;
+                        a_up[0] = zero;
+                        rhs.index_axis_mut(AX0, 0).fill(deriv);
+                    }
+                    SingleBoundary::SecondDeriv(deriv) => {
+                        let dx0 = x[1] - x[0];
+                        a_up[0] = dx0;
+                        a_mid[0] = two * dx0;
+                        let rhs_0 = rhs.index_axis_mut(AX0, 0);
+                        let data_0 = data.index_axis(AX0, 0);
+                        let data_1 = data.index_axis(AX0, 1);
+                        Zip::from(rhs_0)
+                            .and(data_0)
+                            .and(data_1)
+                            .for_each(|rhs_0, &y_0, &y_1| {
+                                *rhs_0 = three * (y_1 - y_0) - deriv * dx0.pow(two) / two;
+                            });
+                    }
+                };
+                match right.specialize() {
+                    SingleBoundary::NotAKnot => {
+                        let dx_1 = x[len - 1] - x[len - 2];
+                        let dx_2 = x[len - 2] - x[len - 3];
+                        a_mid[len - 1] = dx_1;
+                        let d = x[len - 1] - x[len - 3];
+                        a_low[len - 1] = d;
+                        let tmp1 = (two * d + dx_1) * dx_2;
+                        Zip::from(rhs.index_axis_mut(AX0, len - 1))
+                            .and(data.index_axis(AX0, len - 1))
+                            .and(data.index_axis(AX0, len - 2))
+                            .and(data.index_axis(AX0, len - 3))
+                            .for_each(|b, &y_1, &y_2, &y_3| {
+                                *b = (dx_1.pow(two) * (y_2 - y_3) / dx_2
+                                    + tmp1 * (y_1 - y_2) / dx_1)
+                                    / d;
+                            });
+                    }
+                    SingleBoundary::Natural => unreachable!(),
+                    SingleBoundary::Clamped => unreachable!(),
+                    SingleBoundary::FirstDeriv(deriv) => {
+                        a_mid[len - 1] = one;
+                        a_low[len - 1] = zero;
+                        rhs.index_axis_mut(AX0, len - 1).fill(deriv);
+                    }
+                    SingleBoundary::SecondDeriv(deriv) => {
+                        let dxn = x[len - 1] - x[len - 2];
+                        a_mid[len - 1] = two * dxn;
+                        a_low[len - 1] = dxn;
+                        let rhs_n = rhs.index_axis_mut(AX0, len - 1);
+                        let data_n = data.index_axis(AX0, len - 1);
+                        let data_n1 = data.index_axis(AX0, len - 2);
+                        Zip::from(rhs_n)
+                            .and(data_n)
+                            .and(data_n1)
+                            .for_each(|rhs_n, &y_n, &y_n1| {
+                                *rhs_n = three * (y_n - y_n1) + deriv * dxn.pow(two) / two;
+                            });
+                    }
+                };
+            }
+        }
+        Self::thomas(k, a_up, a_mid, a_low, rhs);
+        Ok(())
+    }
+
+    /// The Thomas algorithm is used, because the matrix A will be tridiagonal and diagonally dominant
+    /// [https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm]
+    fn thomas<_D>(
+        mut k: ArrayViewMut<T, _D>,
+        a_up: Array1<T>,
+        mut a_mid: Array1<T>,
+        a_low: Array1<T>,
+        mut rhs: Array<T, _D>,
+    ) where
+        _D: Dimension + RemoveAxis,
+    {
+        let dim = rhs.raw_dim();
+        let len = dim[0];
         let mut rhs_left = rhs.index_axis(AX0, 0).into_owned();
         for i in 1..len {
             let w = a_low[i] / a_mid[i - 1];
@@ -209,7 +574,6 @@ impl CubicSpline {
                 });
         }
 
-        let mut k = Array::zeros(dim);
         Zip::from(k.index_axis_mut(AX0, len - 1))
             .and(rhs.index_axis(AX0, len - 1))
             .for_each(|k, &rhs| {
@@ -227,31 +591,34 @@ impl CubicSpline {
                     *k_right = new_k;
                 })
         }
-
-        let mut c_a = Array::zeros(a_b_dim.clone());
-        let mut c_b = Array::zeros(a_b_dim);
-        for index in 0..len - 1 {
-            Zip::from(c_a.index_axis_mut(AX0, index))
-                .and(c_b.index_axis_mut(AX0, index))
-                .and(k.index_axis(AX0, index))
-                .and(k.index_axis(AX0, index + 1))
-                .and(data.index_axis(AX0, index))
-                .and(data.index_axis(AX0, index + 1))
-                .for_each(|c_a, c_b, &k, &k_right, &y, &y_right| {
-                    *c_a = k * (x[index + 1] - x[index]) - (y_right - y);
-                    *c_b = (y_right - y) - k_right * (x[index + 1] - x[index]);
-                })
-        }
-
-        (c_a, c_b)
     }
 
+    /// create a cubic-spline interpolation stratgy
     pub fn new() -> Self {
-        Self
+        Self {
+            extrapolate: false,
+            boundary: BoundaryCondition::NotAKnot,
+        }
+    }
+
+    /// does the strategy extrapolate? Default is `false`
+    pub fn extrapolate(mut self, extrapolate: bool) -> Self {
+        self.extrapolate = extrapolate;
+        self
+    }
+
+    /// set the boundary condition. default is [`BoundaryCondition::Natural`]
+    pub fn boundary(mut self, boundary: BoundaryCondition<T, D>) -> Self {
+        self.boundary = boundary;
+        self
     }
 }
 
-impl Default for CubicSpline {
+impl<T, D> Default for CubicSpline<T, D>
+where
+    D: Dimension + RemoveAxis,
+    T: SplineNum,
+{
     fn default() -> Self {
         Self::new()
     }
@@ -265,6 +632,7 @@ where
 {
     a: Array<Sd::Elem, D>,
     b: Array<Sd::Elem, D>,
+    extrapolate: bool,
 }
 
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
@@ -280,7 +648,7 @@ where
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-        if !interp.is_in_range(x) {
+        if !self.extrapolate && !interp.is_in_range(x) {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:#?} is not in range",
             )));

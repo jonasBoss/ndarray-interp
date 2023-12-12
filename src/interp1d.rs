@@ -10,7 +10,7 @@
 //!
 //! # Strategies
 //!  - [`Linear`] Linear interpolation strategy
-//!  - [`CubicSpline`] Cubic spline interpolation strategy
+//!  - [`cubic_spline`] Cubic spline interpolation strategy
 
 use std::{any::TypeId, fmt::Debug, ops::Sub};
 
@@ -30,7 +30,14 @@ use crate::{
 mod aliases;
 mod strategies;
 pub use aliases::*;
-pub use strategies::{CubicSpline, Interp1DStrategy, Interp1DStrategyBuilder, Linear};
+pub use strategies::linear::Linear;
+pub use strategies::{Interp1DStrategy, Interp1DStrategyBuilder};
+
+pub mod cubic_spline {
+    pub use super::strategies::cubic_spline::{
+        BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary,
+    };
+}
 
 /// One dimensional interpolator
 #[derive(Debug)]
@@ -444,7 +451,7 @@ where
         let Interp1DBuilder { x, data, strategy } = self;
 
         if data.ndim() < 1 {
-            return Err(DimensionError(
+            return Err(ShapeError(
                 "data dimension is 0, needs to be at least 1".into(),
             ));
         }
@@ -460,7 +467,7 @@ where
             ));
         }
         if x.len() != data.shape()[0] {
-            return Err(BuilderError::AxisLenght(format!(
+            return Err(BuilderError::ShapeError(format!(
                 "Lengths of x and data axis need to match. Got x: {:}, data: {:}",
                 x.len(),
                 data.shape()[0],
