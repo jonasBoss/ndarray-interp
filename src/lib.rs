@@ -44,6 +44,8 @@ pub enum BuilderError {
 pub enum InterpolateError {
     #[error("{0}")]
     OutOfBounds(String),
+    #[error("{0}")]
+    InvalidArguments(String),
 }
 
 /// cast `a` from type `A` to type `B` without any safety checks

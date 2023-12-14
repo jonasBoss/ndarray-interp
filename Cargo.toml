@@ -6,7 +6,7 @@ license = "MIT"
 description = "Interpolation package for ndarray"
 repository = "https://github.com/jonasBoss/ndarray-interp"
 
-keywords = ["interpolation", "multidimensional", "liniar", "biliniar", "cubic-spline"]
+keywords = ["interpolation", "multidimensional", "linear", "bilinear", "cubic-spline"]
 categories = ["science", "algorithms", "mathematics"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

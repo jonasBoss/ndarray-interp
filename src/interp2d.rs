@@ -9,7 +9,7 @@
 //!  - [`Interp2DStrategyBuilder`] The trait used to specialize [`Interp2DBuilder`] to initialize the correct strategy
 //!
 //! # Strategies
-//!  - [`Biliniar`] Linear interpolation strategy
+//!  - [`Bilinear`] Linear interpolation strategy
 
 use std::{any::TypeId, fmt::Debug, ops::Sub};
 
@@ -29,7 +29,7 @@ use crate::{
 mod aliases;
 mod strategies;
 pub use aliases::*;
-pub use strategies::{Biliniar, Interp2DStrategy, Interp2DStrategyBuilder};
+pub use strategies::{Bilinear, Interp2DStrategy, Interp2DStrategyBuilder};
 
 /// Two dimensional interpolator
 #[derive(Debug)]
@@ -47,7 +47,7 @@ where
     strategy: Strat,
 }
 
-impl<Sd, D> Interp2D<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar>
+impl<Sd, D> Interp2D<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Bilinear>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
@@ -56,7 +56,7 @@ where
     /// Get the [Interp2DBuilder]
     pub fn builder(
         data: ArrayBase<Sd, D>,
-    ) -> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar> {
+    ) -> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Bilinear> {
         Interp2DBuilder::new(data)
     }
 }
@@ -379,7 +379,7 @@ where
     strategy: Strat,
 }
 
-impl<Sd, D> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Biliniar>
+impl<Sd, D> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Bilinear>
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
@@ -400,7 +400,7 @@ where
             x,
             y,
             data,
-            strategy: Biliniar::new(),
+            strategy: Bilinear::new(),
         }
     }
 }
@@ -416,7 +416,7 @@ where
     Strat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>,
 {
     /// Set the interpolation strategy by provideing a [`Interp2DStrategyBuilder`].
-    /// By default [`Biliniar`] is used.
+    /// By default [`Bilinear`] is used.
     pub fn strategy<NewStrat: Interp2DStrategyBuilder<Sd, Sx, Sy, D>>(
         self,
         strategy: NewStrat,
