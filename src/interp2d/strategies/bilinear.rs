@@ -8,11 +8,11 @@ use crate::{interp1d::Linear, InterpolateError};
 use super::{Interp2DStrategy, Interp2DStrategyBuilder};
 
 #[derive(Debug)]
-pub struct Biliniar {
+pub struct Bilinear {
     extrapolate: bool,
 }
 
-impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Biliniar
+impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Bilinear
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
@@ -35,7 +35,7 @@ where
     }
 }
 
-impl<Sd, Sx, Sy, D> Interp2DStrategy<Sd, Sx, Sy, D> for Biliniar
+impl<Sd, Sx, Sy, D> Interp2DStrategy<Sd, Sx, Sy, D> for Bilinear
 where
     Sd: Data,
     Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
@@ -82,9 +82,9 @@ where
     }
 }
 
-impl Biliniar {
+impl Bilinear {
     pub fn new() -> Self {
-        Biliniar { extrapolate: false }
+        Bilinear { extrapolate: false }
     }
 
     pub fn extrapolate(mut self, yes: bool) -> Self {
@@ -93,7 +93,7 @@ impl Biliniar {
     }
 }
 
-impl Default for Biliniar {
+impl Default for Bilinear {
     fn default() -> Self {
         Self::new()
     }
