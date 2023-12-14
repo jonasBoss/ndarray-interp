@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Sub};
 
-use ndarray::{Data, Dimension, RemoveAxis, Zip};
+use ndarray::{Data, Dimension, RemoveAxis, Zip, RawData};
 use num_traits::{Num, NumCast};
 
 use crate::{interp1d::Linear, InterpolateError};
@@ -10,6 +10,7 @@ use super::{Interp2DStrategy, Interp2DStrategyBuilder};
 #[derive(Debug)]
 pub struct Bilinear {
     extrapolate: bool,
+    allow_default: bool
 }
 
 impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Bilinear
@@ -20,6 +21,7 @@ where
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
     D::Smaller: RemoveAxis,
+    <Sd as RawData>::Elem: Default
 {
     const MINIMUM_DATA_LENGHT: usize = 2;
 
@@ -43,6 +45,7 @@ where
     Sy: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
     D::Smaller: RemoveAxis,
+    <Sd as RawData>::Elem: Default
 {
     fn interp_into(
         &self,
@@ -51,17 +54,29 @@ where
         x: <Sx>::Elem,
         y: <Sy>::Elem,
     ) -> Result<(), crate::InterpolateError> {
-        if !self.extrapolate && !interpolator.is_in_x_range(x) {
+        if self.extrapolate && self.allow_default {
+            return Err(InterpolateError::InvalidArguments(format!(
+                "cannot extrapolate if default is allowed"
+            )));
+        }
+        if !self.extrapolate && !interpolator.is_in_x_range(x) && !self.allow_default {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:?} is not in range"
             )));
         }
-        if !self.extrapolate && !interpolator.is_in_y_range(y) {
+        if !self.extrapolate && !interpolator.is_in_y_range(y) && !self.allow_default {
             return Err(InterpolateError::OutOfBounds(format!(
                 "y = {y:?} is not in range"
             )));
         }
 
+        // If out of bounds and allow_default, return default
+        if self.allow_default && (!interpolator.is_in_x_range(x) || !interpolator.is_in_y_range(y)) {
+            target.into_iter().for_each(|z| *z = Default::default());
+            return Ok(());
+        }
+
+        // Otherwise, blend values...
         let (x_idx, y_idx) = interpolator.get_index_left_of(x, y);
         let (x1, y1, z11) = interpolator.index_point(x_idx, y_idx);
         let (_, _, z12) = interpolator.index_point(x_idx, y_idx + 1);
@@ -84,11 +99,16 @@ where
 
 impl Bilinear {
     pub fn new() -> Self {
-        Bilinear { extrapolate: false }
+        Self { extrapolate: false, allow_default: false }
     }
 
     pub fn extrapolate(mut self, yes: bool) -> Self {
         self.extrapolate = yes;
+        self
+    }
+
+    pub fn allow_default(mut self, value: bool) -> Self {
+        self.allow_default = value;
         self
     }
 }
