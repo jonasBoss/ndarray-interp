@@ -1,12 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ndarray::{Array, Array1, Axis};
-use ndarray_interp::interp2d::{Biliniar, Interp2D, Interp2DScalar};
+use ndarray_interp::interp2d::{Bilinear, Interp2D, Interp2DScalar};
 
 use rand_extensions::RandArray;
 
 mod rand_extensions;
 
-fn setup() -> (Interp2DScalar<f64, Biliniar>, Array1<f64>, Array1<f64>) {
+fn setup() -> (Interp2DScalar<f64, Bilinear>, Array1<f64>, Array1<f64>) {
     let data = Array::from_rand(10_000, (0.0, 1.0), 42)
         .into_shape((100, 100))
         .unwrap();

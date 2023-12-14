@@ -7,9 +7,9 @@ use crate::{BuilderError, InterpolateError};
 
 use super::Interp2D;
 
-mod biliniar;
+mod bilinear;
 
-pub use biliniar::Biliniar;
+pub use bilinear::Bilinear;
 
 pub trait Interp2DStrategyBuilder<Sd, Sx, Sy, D>
 where

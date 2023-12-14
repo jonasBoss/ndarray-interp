@@ -18,12 +18,12 @@ logarithmic spaced values.
  - added type aliases for common interpolators
  - make the `VectorExtensions` trait public
  - add `Interp1D::new_unchecked` and `Interp2D::new_unchecked` methods
- - add biliniar extrapolation
+ - add bilinear extrapolation
  - impl `Default` for interpolation strategies
 
 # 0.3.0
  - add 2d interpolation
- - add biliniar interpolation strategy
+ - add bilinear interpolation strategy
  - rename `Strategy` to `Interp1DStrategy` and `StrategyBuilder` to `Interp1DStrategyBuilder`
  - make extrapolate filed of `Linear` private add `extrapolate(bool)` method instead.
 
