@@ -1,11 +1,11 @@
 use std::{
     fmt::Debug,
-    ops::{Add, Sub, SubAssign},
+    ops::{Add, Neg, Sub, SubAssign},
 };
 
 use ndarray::{
     s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, FoldWhile, Ix1,
-    IxDyn, RemoveAxis, ScalarOperand, Zip, Slice,
+    IxDyn, RemoveAxis, ScalarOperand, Slice, Zip,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -22,6 +22,7 @@ pub trait SplineNum:
     + PartialOrd
     + Sub
     + SubAssign
+    + Neg<Output = Self>
     + NumCast
     + Add
     + Pow<Self, Output = Self>
@@ -37,6 +38,7 @@ impl<T> SplineNum for T where
         + PartialOrd
         + Sub
         + SubAssign
+        + Neg<Output = T>
         + NumCast
         + Add
         + Pow<Self, Output = Self>
@@ -360,7 +362,7 @@ where
     ///  
     /// **returns** k
     fn solve_for_k<Sd, Sx, _D>(
-        k: ArrayViewMut<T, _D>,
+        mut k: ArrayViewMut<T, _D>,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
         boundary: RowBoundary<T>,
@@ -440,7 +442,69 @@ where
                         return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {first:?}, last: {last:?}")));
                     }
                 }
-                todo!();
+
+                if len == 3 {
+                    todo!();
+                    return Ok(());
+                }
+
+                // due to the preriodicity we need to solve one less equation
+                // the system matrix a is also condensed
+                // https://web.archive.org/web/20151220180652/http://www.cfm.brown.edu/people/gk/chap6/node14.html
+                a_up.slice_axis_inplace(AX0, Slice::from(0..-2));
+                a_mid.slice_axis_inplace(AX0, Slice::from(0..-2));
+                a_low.slice_axis_inplace(AX0, Slice::from(0..-2));
+                rhs.slice_axis_inplace(AX0, Slice::from(0..-1));
+
+                a_mid[0] = two * (dx_1 + dx0);
+                a_up[0] = dx_1;
+
+                let y0 = data.index_axis(AX0, 0);
+                let y1 = data.index_axis(AX0, 1);
+                let slope0: Array<T, _D::Smaller> = (&y1 - &y0) / dx0;
+
+                let y_1 = data.index_axis(AX0, len - 1);
+                let y_2 = data.index_axis(AX0, len - 2);
+                let y_3 = data.index_axis(AX0, len - 3);
+                let slope_1: Array<T, _D::Smaller> = (&y_1 - &y_2) / dx_1;
+                let slope_2: Array<T, _D::Smaller> = (&y_2 - &y_3) / dx_2;
+
+                rhs.index_axis_mut(AX0, 0)
+                    .assign(&((&slope_1 * dx0 + &slope0 * dx_1) * three));
+                rhs.index_axis_mut(AX0, len - 1 - 1)
+                    .assign(&((slope_2 * dx_1 + slope_1 * dx_2) * three));
+
+                let rhs1 = rhs.slice_axis(AX0, Slice::from(0..-1)).to_owned();
+                let mut rhs2 = Array::zeros(rhs1.raw_dim());
+                rhs2.index_axis_mut(AX0, 0).fill(-dx0); // = -dx0;
+                let dx_3 = x[len - 3] - x[len - 4];
+                rhs2.index_axis_mut(AX0, len - 3).fill(-dx_3);
+
+                let mut k1 = Array::zeros(rhs1.raw_dim());
+                let mut k2 = Array::zeros(rhs1.raw_dim());
+
+                Self::thomas(
+                    k1.view_mut(),
+                    a_up.clone(),
+                    a_mid.clone(),
+                    a_low.clone(),
+                    rhs1,
+                );
+                Self::thomas(k2.view_mut(), a_up, a_mid, a_low, rhs2);
+
+                let k_m1 = (&rhs.index_axis(AX0, len - 2)
+                    - &k1.index_axis(AX0, 0) * dx_2
+                    - &k1.index_axis(AX0, len - 3) * dx_1)
+                    / (&k2.index_axis(AX0, 0) * dx_2
+                        + &k2.index_axis(AX0, len - 3) * dx_1
+                        + two * (dx_1 + dx_2));
+
+                k.slice_axis_mut(AX0, Slice::from(0..-2))
+                    .assign(&(k1 + &k_m1 * k2));
+                k.index_axis_mut(AX0, len - 2).assign(&k_m1);
+                let k0 = k.index_axis(AX0, 0).to_owned();
+                k.index_axis_mut(AX0, len - 1).assign(&k0);
+                return Ok(());
             }
             (RowBoundary::Clamped, _) => unreachable!(),
             (RowBoundary::Natural, _) => unreachable!(),
