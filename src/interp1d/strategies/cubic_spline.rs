@@ -5,7 +5,7 @@ use std::{
 
 use ndarray::{
     s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, FoldWhile, Ix1,
-    IxDyn, RemoveAxis, ScalarOperand, Zip,
+    IxDyn, RemoveAxis, ScalarOperand, Zip, Slice,
 };
 use num_traits::{cast, Num, NumCast, Pow};
 
@@ -406,14 +406,14 @@ where
         // RHS vector
         let mut rhs = Array::zeros(dim.clone());
 
-        for i in 1..len - 1 {
-            let rhs = rhs.index_axis_mut(AX0, i);
-            let y_left = data.index_axis(AX0, i - 1);
-            let y_mid = data.index_axis(AX0, i);
-            let y_right = data.index_axis(AX0, i + 1);
+        for n in 1..len - 1 {
+            let rhs = rhs.index_axis_mut(AX0, n);
+            let y_left = data.index_axis(AX0, n - 1);
+            let y_mid = data.index_axis(AX0, n);
+            let y_right = data.index_axis(AX0, n + 1);
 
-            let dxn = x[i + 1] - x[i]; // dx(n)
-            let dxn_1 = x[i] - x[i - 1]; // dx(n-1)
+            let dxn = x[n + 1] - x[n]; // dx(n)
+            let dxn_1 = x[n] - x[n - 1]; // dx(n-1)
 
             Zip::from(y_left).and(y_mid).and(y_right).map_assign_into(
                 rhs,
@@ -422,6 +422,11 @@ where
                 },
             );
         }
+
+        let dx0 = x[1] - x[0];
+        let dx1 = x[2] - x[1];
+        let dx_1 = x[len - 1] - x[len - 2];
+        let dx_2 = x[len - 2] - x[len - 3];
 
         // apply boundary conditions
         match (boundary.specialize(), len) {
@@ -448,8 +453,6 @@ where
                 3,
             ) => {
                 // We handle this case by constructing a parabola passing through given points.
-                let dx0 = x[1] - x[0];
-                let dx1 = x[2] - x[1];
 
                 let y0 = data.index_axis(AX0, 0);
                 let y1 = data.index_axis(AX0, 1);
@@ -473,8 +476,6 @@ where
             (RowBoundary::Mixed { left, right }, _) => {
                 match left.specialize() {
                     SingleBoundary::NotAKnot => {
-                        let dx0 = x[1] - x[0];
-                        let dx1 = x[2] - x[1];
                         a_mid[0] = dx1;
                         let d = x[2] - x[0];
                         a_up[0] = d;
@@ -495,7 +496,6 @@ where
                         rhs.index_axis_mut(AX0, 0).fill(deriv);
                     }
                     SingleBoundary::SecondDeriv(deriv) => {
-                        let dx0 = x[1] - x[0];
                         a_up[0] = dx0;
                         a_mid[0] = two * dx0;
                         let rhs_0 = rhs.index_axis_mut(AX0, 0);
@@ -511,8 +511,6 @@ where
                 };
                 match right.specialize() {
                     SingleBoundary::NotAKnot => {
-                        let dx_1 = x[len - 1] - x[len - 2];
-                        let dx_2 = x[len - 2] - x[len - 3];
                         a_mid[len - 1] = dx_1;
                         let d = x[len - 1] - x[len - 3];
                         a_low[len - 1] = d;
@@ -535,9 +533,8 @@ where
                         rhs.index_axis_mut(AX0, len - 1).fill(deriv);
                     }
                     SingleBoundary::SecondDeriv(deriv) => {
-                        let dxn = x[len - 1] - x[len - 2];
-                        a_mid[len - 1] = two * dxn;
-                        a_low[len - 1] = dxn;
+                        a_mid[len - 1] = two * dx_1;
+                        a_low[len - 1] = dx_1;
                         let rhs_n = rhs.index_axis_mut(AX0, len - 1);
                         let data_n = data.index_axis(AX0, len - 1);
                         let data_n1 = data.index_axis(AX0, len - 2);
@@ -545,7 +542,7 @@ where
                             .and(data_n)
                             .and(data_n1)
                             .for_each(|rhs_n, &y_n, &y_n1| {
-                                *rhs_n = three * (y_n - y_n1) + deriv * dxn.pow(two) / two;
+                                *rhs_n = three * (y_n - y_n1) + deriv * dx_1.pow(two) / two;
                             });
                     }
                 };
