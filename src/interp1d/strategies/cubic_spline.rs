@@ -7,7 +7,7 @@ use ndarray::{
     s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, FoldWhile, Ix1,
     IxDyn, RemoveAxis, ScalarOperand, Slice, Zip,
 };
-use num_traits::{cast, Num, NumCast, Pow};
+use num_traits::{cast, Num, NumCast, Pow, Euclid};
 
 use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
@@ -27,6 +27,7 @@ pub trait SplineNum:
     + Add
     + Pow<Self, Output = Self>
     + ScalarOperand
+    + Euclid
     + Send
 {
 }
@@ -43,6 +44,7 @@ impl<T> SplineNum for T where
         + Add
         + Pow<Self, Output = Self>
         + ScalarOperand
+        + Euclid
         + Send
 {
 }
@@ -280,11 +282,14 @@ where
         Sx2: Data<Elem = Sd::Elem>,
     {
         let (a, b) = self.calc_coefficients(x, data)?;
-        Ok(CubicSplineStrategy {
-            a,
-            b,
-            extrapolate: self.extrapolate,
-        })
+        let extrapolate = if !self.extrapolate {
+            Extrapolate::No
+        } else if matches!(self.boundary, BoundaryCondition::Periodic) {
+            Extrapolate::Periodic
+        } else {
+            Extrapolate::Yes
+        };
+        Ok(CubicSplineStrategy { a, b, extrapolate })
     }
 }
 
@@ -727,6 +732,13 @@ where
 }
 
 #[derive(Debug)]
+enum Extrapolate {
+    Yes,
+    No,
+    Periodic,
+}
+
+#[derive(Debug)]
 pub struct CubicSplineStrategy<Sd, D>
 where
     Sd: Data,
@@ -734,13 +746,13 @@ where
 {
     a: Array<Sd::Elem, D>,
     b: Array<Sd::Elem, D>,
-    extrapolate: bool,
+    extrapolate: Extrapolate,
 }
 
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>
 where
     Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub + Send,
+    Sd::Elem: SplineNum,
     Sx: Data<Elem = Sd::Elem>,
     D: Dimension + RemoveAxis,
 {
@@ -750,10 +762,18 @@ where
         target: ArrayViewMut<'_, <Sd>::Elem, <D as Dimension>::Smaller>,
         x: <Sx>::Elem,
     ) -> Result<(), InterpolateError> {
-        if !self.extrapolate && !interp.is_in_range(x) {
+        let in_range = interp.is_in_range(x);
+        if matches!(self.extrapolate, Extrapolate::No) && !in_range {
             return Err(InterpolateError::OutOfBounds(format!(
                 "x = {x:#?} is not in range",
             )));
+        }
+
+        let mut x = x;
+        if matches!(self.extrapolate, Extrapolate::Periodic) && !in_range {
+            let x0 = interp.x[0];
+            let xn = interp.x[interp.x.len() -1];
+            x = ((x-x0).rem_euclid(&(xn - x0))) + x0;
         }
 
         let idx = interp.get_index_left_of(x);
