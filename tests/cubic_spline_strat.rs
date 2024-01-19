@@ -416,7 +416,7 @@ fn bounds_shape_error1() {
     let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
     let boundaries = BoundaryCondition::Individual(array![[
         RowBoundary::Natural,
-        RowBoundary::Periodic,
+        RowBoundary::Clamped,
         RowBoundary::NotAKnot
     ],]);
     Interp1DBuilder::new(y)
@@ -440,23 +440,26 @@ fn bounds_shape_error2() {
 }
 
 #[test]
-#[should_panic(expected = "First: 1.0, last: 0.5")]
+#[should_panic(
+    expected = "First: [0.5, 1.0], shape=[2], strides=[1], layout=CFcf (0xf), const ndim=1, last: [0.5, 1.1]"
+)]
 fn periodic_wrong_values() {
-    let y = array![[0.5, 1.0], [0.0, 1.5], [3.0, 0.5],];
-    let boundaries =
-        BoundaryCondition::Individual(array![[RowBoundary::Natural, RowBoundary::Periodic],]);
+    let y = array![[0.5, 1.0], [0.0, 1.5], [0.5, 1.1],];
     Interp1DBuilder::new(y)
-        .strategy(CubicSpline::new().boundary(boundaries))
+        .strategy(CubicSpline::new().boundary(BoundaryCondition::Periodic))
         .build()
         .unwrap();
 }
 
 #[test]
-#[should_panic(expected = "First: [0.5, 1.0], shape=[2], strides=[1], layout=CFcf (0xf), const ndim=1, last: [3.0, 0.5]")]
-fn periodic_wrong_values2() {
-    let y = array![[0.5, 1.0], [0.0, 1.5], [0.5, 1.1],];
-    Interp1DBuilder::new(y)
-        .strategy(CubicSpline::new().boundary(BoundaryCondition::Periodic))
+fn extrapolate_periodic() {
+    let data = array![1.0, 2.0, 2.5, 2.5, 3.0, 2.0, 1.0, -2.0, 3.0, 5.0, 6.3, 1.0];
+    let interp = Interp1D::builder(data)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Periodic),
+        )
         .build()
         .unwrap();
 }
