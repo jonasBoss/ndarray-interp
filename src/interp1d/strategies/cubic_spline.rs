@@ -167,8 +167,6 @@ pub enum RowBoundary<T> {
     Natural,
     /// ![`BoundaryCondition::Clamped`]
     Clamped,
-    /// ![`BoundaryCondition::Periodic`]
-    Periodic,
     /// Set individual boundary conditions at the left and right end of the curve
     Mixed {
         left: SingleBoundary<T>,
@@ -176,30 +174,56 @@ pub enum RowBoundary<T> {
     },
 }
 
-impl<T: SplineNum> RowBoundary<T> {
+impl<T: SplineNum> Default for RowBoundary<T> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+impl<T> From<RowBoundary<T>> for InternalBoundary<T> {
+    fn from(val: RowBoundary<T>) -> Self {
+        match val {
+            RowBoundary::NotAKnot => InternalBoundary::NotAKnot,
+            RowBoundary::Natural => InternalBoundary::Natural,
+            RowBoundary::Clamped => InternalBoundary::Clamped,
+            RowBoundary::Mixed { left, right } => InternalBoundary::Mixed { left, right },
+        }
+    }
+}
+
+/// This is essentially [`RowBoundary`] but including the Periodic variant.
+/// The periodic variant can not be applied to a single row only all or nothing.
+/// But we still need it for calculating the coefficients, which may or may not be done
+/// for each row individually.
+enum InternalBoundary<T> {
+    NotAKnot,
+    Natural,
+    Clamped,
+    Periodic,
+    Mixed {
+        left: SingleBoundary<T>,
+        right: SingleBoundary<T>,
+    },
+}
+
+impl<T: SplineNum> InternalBoundary<T> {
     fn specialize(self) -> Self {
         use SingleBoundary::*;
         match self {
-            RowBoundary::Natural => Self::Mixed {
+            InternalBoundary::Natural => Self::Mixed {
                 left: Natural,
                 right: Natural,
             },
-            RowBoundary::NotAKnot => Self::Mixed {
+            InternalBoundary::NotAKnot => Self::Mixed {
                 left: NotAKnot,
                 right: NotAKnot,
             },
-            RowBoundary::Clamped => Self::Mixed {
+            InternalBoundary::Clamped => Self::Mixed {
                 left: Clamped,
                 right: Clamped,
             },
             _ => self,
         }
-    }
-}
-
-impl<T: SplineNum> Default for RowBoundary<T> {
-    fn default() -> Self {
-        Self::NotAKnot
     }
 }
 
@@ -255,12 +279,12 @@ where
     where
         Sx2: Data<Elem = Sd::Elem>,
     {
-        let Self {
-            extrapolate,
-            boundary: _,
-        } = self;
         let (a, b) = self.calc_coefficients(x, data)?;
-        Ok(CubicSplineStrategy { a, b, extrapolate })
+        Ok(CubicSplineStrategy {
+            a,
+            b,
+            extrapolate: self.extrapolate,
+        })
     }
 }
 
@@ -271,7 +295,7 @@ where
 {
     /// Calculate the coefficients `a` and `b`
     fn calc_coefficients<Sd, Sx>(
-        self,
+        &self,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, D>,
     ) -> Result<(Array<Sd::Elem, D>, Array<Sd::Elem, D>), BuilderError>
@@ -284,11 +308,15 @@ where
         let mut k = Array::zeros(dim.clone());
         let kv = k.view_mut();
         match self.boundary {
-            BoundaryCondition::Periodic => Self::solve_for_k(kv, x, data, RowBoundary::Periodic),
-            BoundaryCondition::Natural => Self::solve_for_k(kv, x, data, RowBoundary::Natural),
-            BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, RowBoundary::Clamped),
-            BoundaryCondition::NotAKnot => Self::solve_for_k(kv, x, data, RowBoundary::NotAKnot),
-            BoundaryCondition::Individual(bounds) => {
+            BoundaryCondition::Periodic => {
+                Self::solve_for_k(kv, x, data, InternalBoundary::Periodic)
+            }
+            BoundaryCondition::Natural => Self::solve_for_k(kv, x, data, InternalBoundary::Natural),
+            BoundaryCondition::Clamped => Self::solve_for_k(kv, x, data, InternalBoundary::Clamped),
+            BoundaryCondition::NotAKnot => {
+                Self::solve_for_k(kv, x, data, InternalBoundary::NotAKnot)
+            }
+            BoundaryCondition::Individual(ref bounds) => {
                 let mut bounds_shape = kv.raw_dim();
                 bounds_shape[0] = 1;
                 if bounds_shape != bounds.raw_dim() {
@@ -352,7 +380,11 @@ where
                 k,
                 x,
                 &data,
-                boundary.first().cloned().unwrap_or_else(|| unreachable!()),
+                boundary
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| unreachable!())
+                    .into(),
             )
         }
     }
@@ -365,7 +397,7 @@ where
         mut k: ArrayViewMut<T, _D>,
         x: &ArrayBase<Sx, Ix1>,
         data: &ArrayBase<Sd, _D>,
-        boundary: RowBoundary<T>,
+        boundary: InternalBoundary<T>,
     ) -> Result<(), BuilderError>
     where
         _D: Dimension + RemoveAxis,
@@ -432,7 +464,7 @@ where
 
         // apply boundary conditions
         match (boundary.specialize(), len) {
-            (RowBoundary::Periodic, _) => {
+            (InternalBoundary::Periodic, _) => {
                 let first = data.index_axis(AX0, 0);
                 let last = data.index_axis(AX0, len - 1);
                 if first != last {
@@ -506,11 +538,11 @@ where
                 k.index_axis_mut(AX0, len - 1).assign(&k0);
                 return Ok(());
             }
-            (RowBoundary::Clamped, _) => unreachable!(),
-            (RowBoundary::Natural, _) => unreachable!(),
-            (RowBoundary::NotAKnot, _) => unreachable!(),
+            (InternalBoundary::Clamped, _) => unreachable!(),
+            (InternalBoundary::Natural, _) => unreachable!(),
+            (InternalBoundary::NotAKnot, _) => unreachable!(),
             (
-                RowBoundary::Mixed {
+                InternalBoundary::Mixed {
                     left: SingleBoundary::NotAKnot,
                     right: SingleBoundary::NotAKnot,
                 },
@@ -537,7 +569,7 @@ where
                     .assign(&((&slope1 * dx0 + &slope0 * dx1) * three));
                 rhs.index_axis_mut(AX0, 2).assign(&(slope1 * two));
             }
-            (RowBoundary::Mixed { left, right }, _) => {
+            (InternalBoundary::Mixed { left, right }, _) => {
                 match left.specialize() {
                     SingleBoundary::NotAKnot => {
                         a_mid[0] = dx1;
