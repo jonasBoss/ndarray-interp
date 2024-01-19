@@ -7,7 +7,7 @@ use ndarray::{
     s, Array, Array1, ArrayBase, ArrayView, ArrayViewMut, Axis, Data, Dimension, FoldWhile, Ix1,
     IxDyn, RemoveAxis, ScalarOperand, Slice, Zip,
 };
-use num_traits::{cast, Num, NumCast, Pow, Euclid};
+use num_traits::{cast, Euclid, Num, NumCast, Pow};
 
 use crate::{interp1d::Interp1D, BuilderError, InterpolateError};
 
@@ -772,8 +772,8 @@ where
         let mut x = x;
         if matches!(self.extrapolate, Extrapolate::Periodic) && !in_range {
             let x0 = interp.x[0];
-            let xn = interp.x[interp.x.len() -1];
-            x = ((x-x0).rem_euclid(&(xn - x0))) + x0;
+            let xn = interp.x[interp.x.len() - 1];
+            x = ((x - x0).rem_euclid(&(xn - x0))) + x0;
         }
 
         let idx = interp.get_index_left_of(x);

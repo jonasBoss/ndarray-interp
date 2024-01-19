@@ -18,7 +18,7 @@
 //! and different interpolation strategies
 //!
 //! **2D Strategies**
-//!  - [`interp2d::Biliniar`] - Biliniar interpolation and extrapolation
+//!  - [`interp2d::Bilinear`] - Bilinear interpolation and extrapolation
 //!
 //! # Custom interpolation strategy
 //! This crate defines traits to allow implementation of user
