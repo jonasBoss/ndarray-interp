@@ -2,13 +2,14 @@
  - update `BuilderError` 
    - combine variants `DimensionError` and `AxisLenght` into `ShapeError`
    - add `ValueError` variant
- - update `QubicSpline` stragegie
-   - Move `QubicSpline` interpolator to `interp1d::cubic_spline` module
+ - update `CubicSpline` stragegie
+   - Move `CubicSpline` interpolator to `interp1d::cubic_spline` module
    - add extrapolation
    - add not-a-knot boundary condition
    - add clamped boundary condition
    - make not-a-knot boundary condition the default
    - allow any first or second derivative as boundary condition
+ - fix typo `Biliniar` -> `Bilinear`
 
 # 0.4.1
  - major performance improvement for `interp_scalar()` methods ~-50%
@@ -49,7 +50,7 @@ logarithmic spaced values.
  - updated package structure
  - replaced Interp1DStrategy enum with individual structs
  - added Strategy and StrategyBuilder trait
- - added QubicSpline strategy
+ - added CubicSpline strategy
  - added traits for custom strategies
 
 # 0.1.1
