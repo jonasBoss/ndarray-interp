@@ -462,4 +462,148 @@ fn extrapolate_periodic() {
         )
         .build()
         .unwrap();
+
+    let q = Array1::linspace(-3.0, 15.0, 30);
+    let res = interp.interp_array(&q).unwrap();
+    let expect = array![
+        3.,
+        4.45171164,
+        5.5978812,
+        6.54905092,
+        3.79486808,
+        0.76011398,
+        1.36656494,
+        2.4432986,
+        2.50822019,
+        2.40158688,
+        2.63514361,
+        3.01451693,
+        2.59950279,
+        1.96267846,
+        1.65029582,
+        -0.22831889,
+        -2.04318459,
+        0.41031552,
+        3.63201944,
+        4.66215778,
+        6.05245899,
+        6.19632834,
+        2.68818585,
+        0.64246067,
+        1.77979077,
+        2.52789822,
+        2.46676892,
+        2.41681682,
+        2.76866398,
+        3.
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn extrapolate_periodic_multidim() {
+    let y = array![[0.5, 1.0], [0.0, 1.5], [0.0, 1.5], [0.5, 1.0],];
+    let x = array![-1.0, 0.0, 2.0, 3.0];
+    let interp = Interp1D::builder(y)
+        .x(x)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Periodic),
+        )
+        .build()
+        .unwrap();
+
+    let q = Array1::linspace(-1.5, 3.5, 15);
+    let res = interp.interp_array(&q).unwrap();
+    let expect = array![
+        [0.325, 1.175],
+        [0.48279883, 1.01720117],
+        [0.46260933, 1.03739067],
+        [0.28075802, 1.21924198],
+        [0.04424198, 1.45575802],
+        [-0.14693878, 1.64693878],
+        [-0.26173469, 1.76173469],
+        [-0.3, 1.8],
+        [-0.26173469, 1.76173469],
+        [-0.14693878, 1.64693878],
+        [0.04424198, 1.45575802],
+        [0.28075802, 1.21924198],
+        [0.46260933, 1.03739067],
+        [0.48279883, 1.01720117],
+        [0.325, 1.175]
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn extrapolate_periodic_len3() {
+    let y = array![0.5, 0.0, 0.5];
+    let x = array![-1.0, 0.0, 3.0];
+    let interp = Interp1D::builder(y)
+        .x(x)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Periodic),
+        )
+        .build()
+        .unwrap();
+
+    let q = Array1::linspace(-1.5, 3.5, 15);
+    let res = interp.interp_array(&q).unwrap();
+    let expect = array![
+        0.55555556,
+        0.53773891,
+        0.40889213,
+        0.20845481,
+        0.02623907,
+        -0.05701328,
+        -0.03717201,
+        0.05555556,
+        0.19080013,
+        0.33819242,
+        0.46736314,
+        0.54794299,
+        0.54956268,
+        0.44314869,
+        0.25
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
+}
+
+#[test]
+fn extrapolate_periodic_len3_multidim() {
+    let y = array![[0.5, 1.0], [0.0, 2.5], [0.5, 1.0],];
+    let x = array![-1.0, 0.0, 3.0];
+    let interp = Interp1D::builder(y)
+        .x(x)
+        .strategy(
+            CubicSpline::new()
+                .extrapolate(true)
+                .boundary(BoundaryCondition::Periodic),
+        )
+        .build()
+        .unwrap();
+
+    let q = Array1::linspace(-1.5, 3.5, 15);
+    let res = interp.interp_array(&q).unwrap();
+    let expect = array![
+        [0.55555556, 0.83333333],
+        [0.53773891, 0.88678328],
+        [0.40889213, 1.27332362],
+        [0.20845481, 1.87463557],
+        [0.02623907, 2.4212828],
+        [-0.05701328, 2.67103984],
+        [-0.03717201, 2.61151603],
+        [0.05555556, 2.33333333],
+        [0.19080013, 1.92759961],
+        [0.33819242, 1.48542274],
+        [0.46736314, 1.09791059],
+        [0.54794299, 0.85617104],
+        [0.54956268, 0.85131195],
+        [0.44314869, 1.17055394],
+        [0.25, 1.75]
+    ];
+    assert_relative_eq!(res, expect, epsilon = f64::EPSILON, max_relative = 0.001);
 }
