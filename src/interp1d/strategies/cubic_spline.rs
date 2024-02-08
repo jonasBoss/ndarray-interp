@@ -469,20 +469,33 @@ where
 
         // apply boundary conditions
         match (boundary.specialize(), len) {
-            (InternalBoundary::Periodic, _) => {
-                let first = data.index_axis(AX0, 0);
-                let last = data.index_axis(AX0, len - 1);
-                if first != last {
+            (InternalBoundary::Periodic, 3) => {
+                let y0 = data.index_axis(AX0, 0);
+                let y2 = data.index_axis(AX0, 2);
+                if y0 != y2 {
                     if data.ndim() == 1 {
                         return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {:?}, last: {:?}", data.first().unwrap_or_else(||unreachable!()), data.last().unwrap_or_else(||unreachable!()))));
                     } else {
-                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {first:?}, last: {last:?}")));
+                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {y0:?}, last: {y2:?}")));
                     }
                 }
 
-                if len == 3 {
-                    todo!();
-                    return Ok(());
+                let y1 = data.index_axis(AX0, 1);
+                let slope0: Array<T, _D::Smaller> = (&y1 - &y0) / dx0;
+                let slope1: Array<T, _D::Smaller> = (&y2 - &y1) / dx1;
+                k.assign(&((slope0 / dx0 + slope1 / dx1) / (one / dx0 + one / dx1)));
+                return Ok(());
+            }
+
+            (InternalBoundary::Periodic, _) => {
+                let y0 = data.index_axis(AX0, 0);
+                let y_1 = data.index_axis(AX0, len - 1);
+                if y0 != y_1 {
+                    if data.ndim() == 1 {
+                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {:?}, last: {:?}", data.first().unwrap_or_else(||unreachable!()), data.last().unwrap_or_else(||unreachable!()))));
+                    } else {
+                        return Err(BuilderError::ValueError(format!("for periodic boundary condition the first and last value must be equal. First: {y0:?}, last: {y_1:?}")));
+                    }
                 }
 
                 // due to the preriodicity we need to solve one less equation
@@ -496,7 +509,6 @@ where
                 a_mid[0] = two * (dx_1 + dx0);
                 a_up[0] = dx_1;
 
-                let y0 = data.index_axis(AX0, 0);
                 let y1 = data.index_axis(AX0, 1);
                 let slope0: Array<T, _D::Smaller> = (&y1 - &y0) / dx0;
 
