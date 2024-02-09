@@ -7,6 +7,7 @@
    - add extrapolation
    - add not-a-knot boundary condition
    - add clamped boundary condition
+   - add periodic boundary condition
    - make not-a-knot boundary condition the default
    - allow any first or second derivative as boundary condition
  - fix typo `Biliniar` -> `Bilinear`

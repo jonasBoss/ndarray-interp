@@ -15,6 +15,9 @@ use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
+/// Marker trait that is implemented for anithing that satisfies
+/// the trait bounds required to be used as an element in the QubicSpline
+/// strategy.
 pub trait SplineNum:
     Debug
     + Num
