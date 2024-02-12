@@ -47,6 +47,22 @@ where
     strategy: Strat,
 }
 
+/// Create and configure a [Interp2D] interpolator.
+#[derive(Debug)]
+pub struct Interp2DBuilder<Sd, Sx, Sy, D, Strat>
+where
+    Sd: Data,
+    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
+    Sx: Data<Elem = Sd::Elem>,
+    Sy: Data<Elem = Sd::Elem>,
+    D: Dimension,
+{
+    x: ArrayBase<Sx, Ix1>,
+    y: ArrayBase<Sy, Ix1>,
+    data: ArrayBase<Sd, D>,
+    strategy: Strat,
+}
+
 impl<Sd, D> Interp2D<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Bilinear>
 where
     Sd: Data,
@@ -361,22 +377,6 @@ where
     pub fn is_in_y_range(&self, y: Sy::Elem) -> bool {
         self.y[0] <= y && y <= self.y[self.y.len() - 1]
     }
-}
-
-/// Create and configure a [Interp2D] interpolator.
-#[derive(Debug)]
-pub struct Interp2DBuilder<Sd, Sx, Sy, D, Strat>
-where
-    Sd: Data,
-    Sd::Elem: Num + PartialOrd + NumCast + Copy + Debug + Sub,
-    Sx: Data<Elem = Sd::Elem>,
-    Sy: Data<Elem = Sd::Elem>,
-    D: Dimension,
-{
-    x: ArrayBase<Sx, Ix1>,
-    y: ArrayBase<Sy, Ix1>,
-    data: ArrayBase<Sd, D>,
-    strategy: Strat,
 }
 
 impl<Sd, D> Interp2DBuilder<Sd, OwnedRepr<Sd::Elem>, OwnedRepr<Sd::Elem>, D, Bilinear>

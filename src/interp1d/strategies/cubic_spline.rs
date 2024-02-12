@@ -48,23 +48,6 @@ pub trait SplineNum:
 {
 }
 
-impl<T> SplineNum for T where
-    T: Debug
-        + Num
-        + Copy
-        + PartialOrd
-        + Sub
-        + SubAssign
-        + Neg<Output = T>
-        + NumCast
-        + Add
-        + Pow<Self, Output = Self>
-        + ScalarOperand
-        + Euclid
-        + Send
-{
-}
-
 /// The CubicSpline 1d interpolation Strategy (Builder)
 ///
 /// # Example
@@ -102,6 +85,20 @@ impl<T> SplineNum for T where
 pub struct CubicSpline<T, D: Dimension> {
     extrapolate: bool,
     boundary: BoundaryCondition<T, D>,
+}
+
+/// The CubicSpline 1d interpolation Strategy (Implementation)
+///
+/// This is constructed by [`CubicSpline`]
+#[derive(Debug)]
+pub struct CubicSplineStrategy<Sd, D>
+where
+    Sd: Data,
+    D: Dimension + RemoveAxis,
+{
+    a: Array<Sd::Elem, D>,
+    b: Array<Sd::Elem, D>,
+    extrapolate: Extrapolate,
 }
 
 /// Boundary conditions for the whole dataset
@@ -170,12 +167,6 @@ pub enum BoundaryCondition<T, D: Dimension> {
     Individual(Array<RowBoundary<T>, D>),
 }
 
-impl<T, D: Dimension> Default for BoundaryCondition<T, D> {
-    fn default() -> Self {
-        Self::NotAKnot
-    }
-}
-
 /// Boundary condition for a single data row
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RowBoundary<T> {
@@ -192,27 +183,11 @@ pub enum RowBoundary<T> {
     },
 }
 
-impl<T: SplineNum> Default for RowBoundary<T> {
-    fn default() -> Self {
-        Self::NotAKnot
-    }
-}
-
-impl<T> From<RowBoundary<T>> for InternalBoundary<T> {
-    fn from(val: RowBoundary<T>) -> Self {
-        match val {
-            RowBoundary::NotAKnot => InternalBoundary::NotAKnot,
-            RowBoundary::Natural => InternalBoundary::Natural,
-            RowBoundary::Clamped => InternalBoundary::Clamped,
-            RowBoundary::Mixed { left, right } => InternalBoundary::Mixed { left, right },
-        }
-    }
-}
-
 /// This is essentially [`RowBoundary`] but including the Periodic variant.
 /// The periodic variant can not be applied to a single row only all or nothing.
 /// But we still need it for calculating the coefficients, which may or may not be done
 /// for each row individually.
+#[derive(Debug)]
 enum InternalBoundary<T> {
     NotAKnot,
     Natural,
@@ -222,6 +197,59 @@ enum InternalBoundary<T> {
         left: SingleBoundary<T>,
         right: SingleBoundary<T>,
     },
+}
+
+/// Boundary condition for a single boundary (one side of one data row)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SingleBoundary<T> {
+    /// ![`BoundaryCondition::NotAKnot`]
+    NotAKnot,
+    /// This ist the same as `SingleBoundary::SecondDeriv(0.0)`
+    /// ![`BoundaryCondition::Natural`]
+    Natural,
+    /// This ist the same as `SingleBoundary::FirstDeriv(0.0)`
+    /// ![`BoundaryCondition::Clamped`]
+    Clamped,
+    /// Set a value for the first derivative at the curve end
+    FirstDeriv(T),
+    /// Set a value for the second derivative at the curve end
+    SecondDeriv(T),
+}
+
+#[derive(Debug)]
+enum Extrapolate {
+    Yes,
+    No,
+    Periodic,
+}
+
+impl<T> SplineNum for T where
+    T: Debug
+        + Num
+        + Copy
+        + PartialOrd
+        + Sub
+        + SubAssign
+        + Neg<Output = T>
+        + NumCast
+        + Add
+        + Pow<Self, Output = Self>
+        + ScalarOperand
+        + Euclid
+        + Send
+{
+}
+
+impl<T, D: Dimension> Default for BoundaryCondition<T, D> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
+}
+
+impl<T: SplineNum> Default for RowBoundary<T> {
+    fn default() -> Self {
+        Self::NotAKnot
+    }
 }
 
 impl<T: SplineNum> InternalBoundary<T> {
@@ -245,21 +273,15 @@ impl<T: SplineNum> InternalBoundary<T> {
     }
 }
 
-/// Boundary condition for a single boundary (one side of one data row)
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum SingleBoundary<T> {
-    /// ![`BoundaryCondition::NotAKnot`]
-    NotAKnot,
-    /// This ist the same as `SingleBoundary::SecondDeriv(0.0)`
-    /// ![`BoundaryCondition::Natural`]
-    Natural,
-    /// This ist the same as `SingleBoundary::FirstDeriv(0.0)`
-    /// ![`BoundaryCondition::Clamped`]
-    Clamped,
-    /// Set a value for the first derivative at the curve end
-    FirstDeriv(T),
-    /// Set a value for the second derivative at the curve end
-    SecondDeriv(T),
+impl<T> From<RowBoundary<T>> for InternalBoundary<T> {
+    fn from(val: RowBoundary<T>) -> Self {
+        match val {
+            RowBoundary::NotAKnot => InternalBoundary::NotAKnot,
+            RowBoundary::Natural => InternalBoundary::Natural,
+            RowBoundary::Clamped => InternalBoundary::Clamped,
+            RowBoundary::Mixed { left, right } => InternalBoundary::Mixed { left, right },
+        }
+    }
 }
 
 impl<T: SplineNum> SingleBoundary<T> {
@@ -276,36 +298,6 @@ impl<T: SplineNum> SingleBoundary<T> {
 impl<T: SplineNum> Default for SingleBoundary<T> {
     fn default() -> Self {
         Self::NotAKnot
-    }
-}
-
-impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline<Sd::Elem, D>
-where
-    Sd: Data,
-    Sd::Elem: SplineNum,
-    Sx: Data<Elem = Sd::Elem>,
-    D: Dimension + RemoveAxis,
-{
-    const MINIMUM_DATA_LENGHT: usize = 3;
-    type FinishedStrat = CubicSplineStrategy<Sd, D>;
-
-    fn build<Sx2>(
-        self,
-        x: &ArrayBase<Sx2, Ix1>,
-        data: &ArrayBase<Sd, D>,
-    ) -> Result<Self::FinishedStrat, BuilderError>
-    where
-        Sx2: Data<Elem = Sd::Elem>,
-    {
-        let (a, b) = self.calc_coefficients(x, data)?;
-        let extrapolate = if !self.extrapolate {
-            Extrapolate::No
-        } else if matches!(self.boundary, BoundaryCondition::Periodic) {
-            Extrapolate::Periodic
-        } else {
-            Extrapolate::Yes
-        };
-        Ok(CubicSplineStrategy { a, b, extrapolate })
     }
 }
 
@@ -749,6 +741,36 @@ where
     }
 }
 
+impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for CubicSpline<Sd::Elem, D>
+where
+    Sd: Data,
+    Sd::Elem: SplineNum,
+    Sx: Data<Elem = Sd::Elem>,
+    D: Dimension + RemoveAxis,
+{
+    const MINIMUM_DATA_LENGHT: usize = 3;
+    type FinishedStrat = CubicSplineStrategy<Sd, D>;
+
+    fn build<Sx2>(
+        self,
+        x: &ArrayBase<Sx2, Ix1>,
+        data: &ArrayBase<Sd, D>,
+    ) -> Result<Self::FinishedStrat, BuilderError>
+    where
+        Sx2: Data<Elem = Sd::Elem>,
+    {
+        let (a, b) = self.calc_coefficients(x, data)?;
+        let extrapolate = if !self.extrapolate {
+            Extrapolate::No
+        } else if matches!(self.boundary, BoundaryCondition::Periodic) {
+            Extrapolate::Periodic
+        } else {
+            Extrapolate::Yes
+        };
+        Ok(CubicSplineStrategy { a, b, extrapolate })
+    }
+}
+
 impl<T, D> Default for CubicSpline<T, D>
 where
     D: Dimension + RemoveAxis,
@@ -757,27 +779,6 @@ where
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[derive(Debug)]
-enum Extrapolate {
-    Yes,
-    No,
-    Periodic,
-}
-
-/// The CubicSpline 1d interpolation Strategy (Implementation)
-///
-/// This is constructed by [`CubicSpline`]
-#[derive(Debug)]
-pub struct CubicSplineStrategy<Sd, D>
-where
-    Sd: Data,
-    D: Dimension + RemoveAxis,
-{
-    a: Array<Sd::Elem, D>,
-    b: Array<Sd::Elem, D>,
-    extrapolate: Extrapolate,
 }
 
 impl<Sd, Sx, D> Interp1DStrategy<Sd, Sx, D> for CubicSplineStrategy<Sd, D>

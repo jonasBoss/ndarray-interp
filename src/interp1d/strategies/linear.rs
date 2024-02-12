@@ -13,6 +13,35 @@ pub struct Linear {
     extrapolate: bool,
 }
 
+impl Linear {
+    /// create a linear interpolation stratgy
+    pub fn new() -> Self {
+        Self { extrapolate: false }
+    }
+
+    /// does the strategy extrapolate? Default is `false`
+    pub fn extrapolate(mut self, extrapolate: bool) -> Self {
+        self.extrapolate = extrapolate;
+        self
+    }
+
+    /// linearly interpolate/exrapolate between two points
+    pub(crate) fn calc_frac<T>((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T
+    where
+        T: Num + Copy,
+    {
+        let b = y1;
+        let m = (y2 - y1) / (x2 - x1);
+        m * (x - x1) + b
+    }
+}
+
+impl Default for Linear {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Sd, Sx, D> Interp1DStrategyBuilder<Sd, Sx, D> for Linear
 where
     Sd: Data,
@@ -66,34 +95,5 @@ where
             *t = Self::calc_frac((x1, y1), (x2, y2), x);
         });
         Ok(())
-    }
-}
-
-impl Linear {
-    /// create a linear interpolation stratgy
-    pub fn new() -> Self {
-        Self { extrapolate: false }
-    }
-
-    /// does the strategy extrapolate? Default is `false`
-    pub fn extrapolate(mut self, extrapolate: bool) -> Self {
-        self.extrapolate = extrapolate;
-        self
-    }
-
-    /// linearly interpolate/exrapolate between two points
-    pub(crate) fn calc_frac<T>((x1, y1): (T, T), (x2, y2): (T, T), x: T) -> T
-    where
-        T: Num + Copy,
-    {
-        let b = y1;
-        let m = (y2 - y1) / (x2 - x1);
-        m * (x - x1) + b
-    }
-}
-
-impl Default for Linear {
-    fn default() -> Self {
-        Self::new()
     }
 }

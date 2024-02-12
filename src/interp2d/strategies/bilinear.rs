@@ -12,6 +12,23 @@ pub struct Bilinear {
     extrapolate: bool,
 }
 
+impl Bilinear {
+    pub fn new() -> Self {
+        Bilinear { extrapolate: false }
+    }
+
+    pub fn extrapolate(mut self, yes: bool) -> Self {
+        self.extrapolate = yes;
+        self
+    }
+}
+
+impl Default for Bilinear {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Sd, Sx, Sy, D> Interp2DStrategyBuilder<Sd, Sx, Sy, D> for Bilinear
 where
     Sd: Data,
@@ -79,22 +96,5 @@ where
                 *z = Linear::calc_frac((y1, z1), (y2, z2), y)
             });
         Ok(())
-    }
-}
-
-impl Bilinear {
-    pub fn new() -> Self {
-        Bilinear { extrapolate: false }
-    }
-
-    pub fn extrapolate(mut self, yes: bool) -> Self {
-        self.extrapolate = yes;
-        self
-    }
-}
-
-impl Default for Bilinear {
-    fn default() -> Self {
-        Self::new()
     }
 }

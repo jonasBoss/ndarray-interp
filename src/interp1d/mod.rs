@@ -50,6 +50,25 @@ where
     strategy: Strat,
 }
 
+/// Create and configure a [Interp1D] Interpolator.
+///
+/// # Default configuration
+/// In the default configuration the interpolation strategy is [`Linear{extrapolate: false}`].
+/// The data will be interpolated along [`Axis(0)`] (currently this can not be changed).
+/// The index to `Axis(0)` of the data will be used as x values.
+#[derive(Debug)]
+pub struct Interp1DBuilder<Sd, Sx, D, Strat>
+where
+    Sd: Data,
+    Sd::Elem: Num + Debug,
+    Sx: Data<Elem = Sd::Elem>,
+    D: Dimension,
+{
+    x: ArrayBase<Sx, Ix1>,
+    data: ArrayBase<Sd, D>,
+    strategy: Strat,
+}
+
 impl<Sd, D> Interp1D<Sd, OwnedRepr<Sd::Elem>, D, Linear>
 where
     Sd: Data,
@@ -364,25 +383,6 @@ where
     pub fn is_in_range(&self, x: Sx::Elem) -> bool {
         self.x[0] <= x && x <= self.x[self.x.len() - 1]
     }
-}
-
-/// Create and configure a [Interp1D] Interpolator.
-///
-/// # Default configuration
-/// In the default configuration the interpolation strategy is [`Linear{extrapolate: false}`].
-/// The data will be interpolated along [`Axis(0)`] (currently this can not be changed).
-/// The index to `Axis(0)` of the data will be used as x values.
-#[derive(Debug)]
-pub struct Interp1DBuilder<Sd, Sx, D, Strat>
-where
-    Sd: Data,
-    Sd::Elem: Num + Debug,
-    Sx: Data<Elem = Sd::Elem>,
-    D: Dimension,
-{
-    x: ArrayBase<Sx, Ix1>,
-    data: ArrayBase<Sd, D>,
-    strategy: Strat,
 }
 
 impl<Sd, D> Interp1DBuilder<Sd, OwnedRepr<Sd::Elem>, D, Linear>
