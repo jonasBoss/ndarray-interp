@@ -31,13 +31,8 @@ mod aliases;
 mod strategies;
 pub use aliases::*;
 pub use strategies::linear::Linear;
+pub use strategies::cubic_spline;
 pub use strategies::{Interp1DStrategy, Interp1DStrategyBuilder};
-
-pub mod cubic_spline {
-    pub use super::strategies::cubic_spline::{
-        BoundaryCondition, CubicSpline, RowBoundary, SingleBoundary,
-    };
-}
 
 /// One dimensional interpolator
 #[derive(Debug)]
