@@ -359,7 +359,7 @@ where
     ///  - `x` is stricktly monotonic rising
     ///  - `data.shape()[0] == x.len()`
     ///  - the `strategy` is porperly initialized with the data
-    pub fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
+    pub unsafe fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
         Interp1D { x, data, strategy }
     }
 
