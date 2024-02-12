@@ -1,3 +1,16 @@
+//! The Cubic Spline interpolation stategy
+//!
+//! This module defines the [`CubicSpline`] struct which can be used with
+//! [`Interp1DBuilder::strategy()`](super::super::Interp1DBuilder::strategy).
+//!
+//! # Boundary conditions
+//! The Cubic Spline Strategy can be customized with bounday conditions.
+//! There are 3 Levels of boundary conditions:
+//!  - [`BoundaryCondition`] The toplevel boundary applys to the whole dataset
+//!  - [`RowBoundary`] applys to a single row in the dataset (use with [`BoundaryCondition::Individual`])
+//!  - [`SingleBoundary`] applys to an individual boundary of a single row (use with [`RowBoundary::Mixed`])
+//!
+
 use std::{
     fmt::Debug,
     ops::{Add, Neg, Sub, SubAssign},
@@ -15,8 +28,8 @@ use super::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 const AX0: Axis = Axis(0);
 
-/// Marker trait that is implemented for anithing that satisfies
-/// the trait bounds required to be used as an element in the QubicSpline
+/// Marker trait that is implemented for anything that satisfies
+/// the trait bounds required to be used as an element in the CubicSpline
 /// strategy.
 pub trait SplineNum:
     Debug
@@ -52,7 +65,7 @@ impl<T> SplineNum for T where
 {
 }
 
-/// The CubicSpline 1d interpolation Strategy
+/// The CubicSpline 1d interpolation Strategy (Builder)
 ///
 /// # Example
 /// From [Wikipedia](https://en.wikipedia.org/wiki/Spline_interpolation#Example)
@@ -753,6 +766,9 @@ enum Extrapolate {
     Periodic,
 }
 
+/// The CubicSpline 1d interpolation Strategy (Implementation)
+///
+/// This is constructed by [`CubicSpline`]
 #[derive(Debug)]
 pub struct CubicSplineStrategy<Sd, D>
 where

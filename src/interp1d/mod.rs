@@ -30,8 +30,8 @@ use crate::{
 mod aliases;
 mod strategies;
 pub use aliases::*;
-pub use strategies::linear::Linear;
 pub use strategies::cubic_spline;
+pub use strategies::linear::Linear;
 pub use strategies::{Interp1DStrategy, Interp1DStrategyBuilder};
 
 /// One dimensional interpolator
