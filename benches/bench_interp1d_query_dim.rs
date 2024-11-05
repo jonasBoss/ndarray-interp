@@ -13,7 +13,7 @@ fn bench_scalar_data_1d_query(c: &mut Criterion) {
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
 
-    let query = query.into_shape((2500, 4)).unwrap();
+    let query = query.into_shape_with_order((2500, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D scalar `interp_array`", |b| {
         b.iter(|| {
@@ -38,7 +38,7 @@ fn bench_scalar_data_2d_query(c: &mut Criterion) {
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
 
-    let query = query.into_shape((625, 4, 4)).unwrap();
+    let query = query.into_shape_with_order((625, 4, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D scalar `interp_array` 2D-query", |b| {
         b.iter(|| {
@@ -63,7 +63,7 @@ fn bench_scalar_data_3d_query(c: &mut Criterion) {
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
 
-    let query = query.into_shape((125, 5, 4, 4)).unwrap();
+    let query = query.into_shape_with_order((125, 5, 4, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D scalar `interp_array` 3D-query", |b| {
         b.iter(|| {

@@ -12,13 +12,13 @@ categories = ["science", "algorithms", "mathematics"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ndarray = "0.15"
+ndarray = "0.16"
 num-traits = "0.2"
 thiserror = "1.0"
 
 [dev-dependencies]
 cargo-tarpaulin = "0.27"
-ndarray = {version = "0.15", features = ["approx-0_5", "rayon"] }
+ndarray = {version = "0.16", features = ["approx", "rayon"] }
 approx = "0.5" 
 criterion = "0.5"
 rand = "0.8"

@@ -265,7 +265,7 @@ where
                     }
                 });
 
-            let subview = match subview.into_shape(
+            let subview = match subview.into_shape_with_order(
                 self.data
                     .raw_dim()
                     .remove_axis(Axis(0))
@@ -543,7 +543,7 @@ mod tests {
             #[test]
             fn $name() {
                 let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
-                    .into_shape($shape)
+                    .into_shape_with_order($shape)
                     .unwrap();
                 let interp = Interp2D::builder(arr).build().unwrap();
                 let res = interp.interp(2.2, 2.2).unwrap();
@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn interp2d_2d_scalar() {
         let arr = rand_arr(4usize.pow(2), (0.0, 1.0), 64)
-            .into_shape((4, 4))
+            .into_shape_with_order((4, 4))
             .unwrap();
         let _res: f64 = Interp2D::builder(arr) // typecheck f64 as return type
             .build()

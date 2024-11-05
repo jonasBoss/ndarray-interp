@@ -8,7 +8,7 @@ mod rand_extensions;
 
 fn setup() -> (Interp2DScalar<f64, Bilinear>, Array1<f64>, Array1<f64>) {
     let data = Array::from_rand(10_000, (0.0, 1.0), 42)
-        .into_shape((100, 100))
+        .into_shape_with_order((100, 100))
         .unwrap();
     let interp = Interp2D::builder(data).build().unwrap();
     let query_x = Array::from_rand(10_000, (0.0, 99.0), 123);
@@ -18,8 +18,8 @@ fn setup() -> (Interp2DScalar<f64, Bilinear>, Array1<f64>, Array1<f64>) {
 
 fn bench_scalar_data_1d_query(c: &mut Criterion) {
     let (interp, query_x, query_y) = black_box(setup());
-    let query_x = query_x.into_shape((2500, 4)).unwrap();
-    let query_y = query_y.into_shape((2500, 4)).unwrap();
+    let query_x = query_x.into_shape_with_order((2500, 4)).unwrap();
+    let query_y = query_y.into_shape_with_order((2500, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
     let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
 
@@ -43,8 +43,8 @@ fn bench_scalar_data_1d_query(c: &mut Criterion) {
 
 fn bench_scalar_data_2d_query(c: &mut Criterion) {
     let (interp, query_x, query_y) = black_box(setup());
-    let query_x = query_x.into_shape((625, 4, 4)).unwrap();
-    let query_y = query_y.into_shape((625, 4, 4)).unwrap();
+    let query_x = query_x.into_shape_with_order((625, 4, 4)).unwrap();
+    let query_y = query_y.into_shape_with_order((625, 4, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
     let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
 
@@ -68,8 +68,8 @@ fn bench_scalar_data_2d_query(c: &mut Criterion) {
 
 fn bench_scalar_data_3d_query(c: &mut Criterion) {
     let (interp, query_x, query_y) = black_box(setup());
-    let query_x = query_x.into_shape((125, 5, 4, 4)).unwrap();
-    let query_y = query_y.into_shape((125, 5, 4, 4)).unwrap();
+    let query_x = query_x.into_shape_with_order((125, 5, 4, 4)).unwrap();
+    let query_y = query_y.into_shape_with_order((125, 5, 4, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
     let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
 
