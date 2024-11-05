@@ -67,7 +67,7 @@ fn bench_interp1d_scalar_multithread(c: &mut Criterion) {
         })
     });
 
-    let query = query.into_shape((2500, 4)).unwrap();
+    let query = query.into_shape_with_order((2500, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D scalar MT `interp_array`", |b| {
         b.iter(|| {
@@ -80,7 +80,7 @@ fn bench_interp1d_scalar_multithread(c: &mut Criterion) {
 
 fn bench_interp1d_array(c: &mut Criterion) {
     let data = Array::from_rand(500, (0.0, 1.0), 69)
-        .into_shape((100, 5))
+        .into_shape_with_order((100, 5))
         .unwrap();
     let interp = Interp1D::builder(data).build().unwrap();
     let query = Array::from_rand(10_000, (0.0, 99.0), 123);
@@ -102,7 +102,7 @@ fn bench_interp1d_array(c: &mut Criterion) {
         })
     });
 
-    let query = query.into_shape((2500, 4)).unwrap();
+    let query = query.into_shape_with_order((2500, 4)).unwrap();
     let query_arr: Vec<_> = query.axis_iter(Axis(0)).collect();
     c.bench_function("1D array `interp_array`", |b| {
         b.iter(|| {

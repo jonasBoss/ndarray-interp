@@ -11,7 +11,7 @@ mod rand_extensions;
 
 fn bench_interp2d_scalar(c: &mut Criterion) {
     let data = Array::from_rand(10_000, (0.0, 1.0), 42)
-        .into_shape((100, 100))
+        .into_shape_with_order((100, 100))
         .unwrap();
     let interp = Interp2D::builder(data).build().unwrap();
     let query_x = Array::from_rand(10_000, (0.0, 99.0), 123);
@@ -45,7 +45,7 @@ fn bench_interp2d_scalar(c: &mut Criterion) {
 
 fn bench_interp2d_scalar_multithread(c: &mut Criterion) {
     let data = Array::from_rand(10_000, (0.0, 1.0), 42)
-        .into_shape((100, 100))
+        .into_shape_with_order((100, 100))
         .unwrap();
     let interp = Interp2D::builder(data).build().unwrap();
     let query_x = Array::from_rand(10_000, (0.0, 99.0), 123);
@@ -67,8 +67,8 @@ fn bench_interp2d_scalar_multithread(c: &mut Criterion) {
         })
     });
 
-    let query_x = query_x.into_shape((2500, 4)).unwrap();
-    let query_y = query_y.into_shape((2500, 4)).unwrap();
+    let query_x = query_x.into_shape_with_order((2500, 4)).unwrap();
+    let query_y = query_y.into_shape_with_order((2500, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
     let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
     c.bench_function("2D scalar MT `interp_array`", |b| {
@@ -85,7 +85,7 @@ fn bench_interp2d_scalar_multithread(c: &mut Criterion) {
 
 fn bench_interp2d_array(c: &mut Criterion) {
     let data = Array::from_rand(50_000, (0.0, 1.0), 69)
-        .into_shape((100, 100, 5))
+        .into_shape_with_order((100, 100, 5))
         .unwrap();
     let interp = Interp2D::builder(data).build().unwrap();
     let query_x = Array::from_rand(10_000, (0.0, 99.0), 123);
@@ -108,8 +108,8 @@ fn bench_interp2d_array(c: &mut Criterion) {
         })
     });
 
-    let query_x = query_x.into_shape((2500, 4)).unwrap();
-    let query_y = query_y.into_shape((2500, 4)).unwrap();
+    let query_x = query_x.into_shape_with_order((2500, 4)).unwrap();
+    let query_y = query_y.into_shape_with_order((2500, 4)).unwrap();
     let query_arrx: Vec<_> = query_x.axis_iter(Axis(0)).collect();
     let query_arry: Vec<_> = query_y.axis_iter(Axis(0)).collect();
     c.bench_function("2D array `interp_array`", |b| {

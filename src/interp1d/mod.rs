@@ -308,14 +308,15 @@ where
                     }
                 });
 
-            let subview = match subview.into_shape(self.data.raw_dim().remove_axis(Axis(0))) {
-                Ok(view) => view,
-                Err(err) => {
-                    let expect = self.get_buffer_shape(xs.raw_dim()).into_pattern();
-                    let got = buffer.dim();
-                    panic!("{err} expected: {expect:?}, got: {got:?}")
-                }
-            };
+            let subview =
+                match subview.into_shape_with_order(self.data.raw_dim().remove_axis(Axis(0))) {
+                    Ok(view) => view,
+                    Err(err) => {
+                        let expect = self.get_buffer_shape(xs.raw_dim()).into_pattern();
+                        let got = buffer.dim();
+                        panic!("{err} expected: {expect:?}, got: {got:?}")
+                    }
+                };
 
             self.strategy.interp_into(self, subview, x)?;
         }
@@ -359,7 +360,11 @@ where
     ///  - `x` is stricktly monotonic rising
     ///  - `data.shape()[0] == x.len()`
     ///  - the `strategy` is porperly initialized with the data
-    pub unsafe fn new_unchecked(x: ArrayBase<Sx, Ix1>, data: ArrayBase<Sd, D>, strategy: Strat) -> Self {
+    pub unsafe fn new_unchecked(
+        x: ArrayBase<Sx, Ix1>,
+        data: ArrayBase<Sd, D>,
+        strategy: Strat,
+    ) -> Self {
         Interp1D { x, data, strategy }
     }
 
@@ -498,7 +503,7 @@ mod tests {
     macro_rules! get_interp {
         ($dim:expr, $shape:expr) => {{
             let arr = rand_arr(4usize.pow($dim), (0.0, 1.0), 64)
-                .into_shape($shape)
+                .into_shape_with_order($shape)
                 .unwrap();
             Interp1D::builder(arr).build().unwrap()
         }};
@@ -565,7 +570,7 @@ mod tests {
     #[should_panic(expected = "expected: [2], got: [1]")] // this is not really a good message
     fn interp1d_2d_array_into_too_small1() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
-            .into_shape((4, 4))
+            .into_shape_with_order((4, 4))
             .unwrap();
         let interp = Interp1D::builder(arr).build().unwrap();
         let mut buf = Array::zeros((1, 4));
@@ -576,7 +581,7 @@ mod tests {
     #[should_panic]
     fn interp1d_2d_array_into_too_small2() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
-            .into_shape((4, 4))
+            .into_shape_with_order((4, 4))
             .unwrap();
         let interp = Interp1D::builder(arr).build().unwrap();
         let mut buf = Array::zeros((2, 3));
@@ -587,7 +592,7 @@ mod tests {
     #[should_panic]
     fn interp1d_2d_array_into_too_big1() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
-            .into_shape((4, 4))
+            .into_shape_with_order((4, 4))
             .unwrap();
         let interp = Interp1D::builder(arr).build().unwrap();
         let mut buf = Array::zeros((3, 4));
@@ -598,7 +603,7 @@ mod tests {
     #[should_panic]
     fn interp1d_2d_array_into_too_big2() {
         let arr = rand_arr((4usize).pow(2), (0.0, 1.0), 64)
-            .into_shape((4, 4))
+            .into_shape_with_order((4, 4))
             .unwrap();
         let interp = Interp1D::builder(arr).build().unwrap();
         let mut buf = Array::zeros((2, 5));

@@ -83,17 +83,19 @@ fn extrapolate() {
 
 #[test]
 fn interpolate_array() {
-    let data = Array::linspace(0.0, 8.0, 9).into_shape((3, 3)).unwrap();
+    let data = Array::linspace(0.0, 8.0, 9)
+        .into_shape_with_order((3, 3))
+        .unwrap();
     let x = array![1.0, 2.0, 3.0];
     let y = array![4.0, 5.0, 6.0];
     let resolution = 11usize;
     let qx = Array::linspace(1.0, 3.0, resolution);
     let qy = Array::linspace(4.0, 6.0, resolution);
     let qx = Array::from_iter(qx.into_iter().flat_map(|x| repeat(x).take(resolution)))
-        .into_shape((resolution, resolution))
+        .into_shape_with_order((resolution, resolution))
         .unwrap();
     let qy = Array::from_iter(repeat(qy).take(resolution).flatten())
-        .into_shape((resolution, resolution))
+        .into_shape_with_order((resolution, resolution))
         .unwrap();
 
     let interp = Interp2D::builder(data).x(x).y(y).build().unwrap();
@@ -247,7 +249,7 @@ fn interp_nd_data() {
         .flatten()
         .flatten(),
     )
-    .into_shape((2, 2, 2, 2))
+    .into_shape_with_order((2, 2, 2, 2))
     .unwrap();
 
     let interp = Interp2DBuilder::new(data).build().unwrap();
@@ -265,7 +267,9 @@ fn interp_nd_data() {
 #[test]
 #[should_panic(expected = "`xs.shape()` and `ys.shape()` do not match")]
 fn interp_array_with_unmatched_axis() {
-    let data = Array::linspace(0.0, 8.0, 9).into_shape((3, 3)).unwrap();
+    let data = Array::linspace(0.0, 8.0, 9)
+        .into_shape_with_order((3, 3))
+        .unwrap();
     let qx = array![0.0, 1.0];
     let qy = array![0.0, 1.0, 2.0];
     let interp = Interp2D::builder(data).build().unwrap();
