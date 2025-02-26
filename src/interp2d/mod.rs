@@ -327,7 +327,7 @@ where
     ///  - `x` and `y` are stricktly monotonic rising
     ///  - `data.shape()[0] == x.len()`, `data.shape()[1] == y.len()`
     ///  - the `strategy` is porperly initialized with the data
-    pub unsafe fn new_unchecked(
+    pub fn new_unchecked(
         x: ArrayBase<Sx, Ix1>,
         y: ArrayBase<Sy, Ix1>,
         data: ArrayBase<Sd, D>,

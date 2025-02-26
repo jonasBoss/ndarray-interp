@@ -13,7 +13,6 @@
    - make not-a-knot boundary condition the default
    - allow any first or second derivative as boundary condition
  - fix typo `Biliniar` -> `Bilinear`
- - change `new_unchecked` methods to be marked as `unsafe`
 
 # 0.4.1
  - major performance improvement for `interp_scalar()` methods ~-50%
