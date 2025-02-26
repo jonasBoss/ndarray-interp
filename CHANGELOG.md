@@ -1,5 +1,6 @@
 # 0.5.0
  - update `ndarray` to version 0.16
+ - update `thiserror` to version 2.0
  - update `BuilderError` 
    - combine variants `DimensionError` and `AxisLenght` into `ShapeError`
    - add `ValueError` variant
