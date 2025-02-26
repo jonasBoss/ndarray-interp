@@ -21,7 +21,7 @@ cargo-tarpaulin = "0.27"
 ndarray = {version = "0.16", features = ["approx", "rayon"] }
 approx = "0.5" 
 criterion = "0.5"
-rand = "0.8"
+rand = "0.9"
 
 [[bench]]
 name = "bench_vector_extensions"

@@ -1,6 +1,6 @@
 use ndarray::{Array, Ix1};
 use rand::{
-    distributions::{uniform::SampleUniform, Uniform},
+    distr::{uniform::SampleUniform, Uniform},
     rngs::StdRng,
     Rng, SeedableRng,
 };
@@ -18,7 +18,7 @@ impl<T: SampleUniform + PartialOrd> RandArray<T> for Array<T, Ix1> {
     fn from_rand(size: usize, range: (T, T), seed: u64) -> Self {
         Array::from_iter(
             rng(seed)
-                .sample_iter(Uniform::new_inclusive(range.0, range.1))
+                .sample_iter(Uniform::new_inclusive(range.0, range.1).unwrap())
                 .take(size),
         )
     }
@@ -26,7 +26,7 @@ impl<T: SampleUniform + PartialOrd> RandArray<T> for Array<T, Ix1> {
     fn from_rand_ordered(size: usize, range: (T, T), seed: u64) -> Self {
         let mut arr = Vec::from_iter(
             rng(seed)
-                .sample_iter(Uniform::new_inclusive(range.0, range.1))
+                .sample_iter(Uniform::new_inclusive(range.0, range.1).unwrap())
                 .take(size),
         );
         arr.sort_by(|a, b| a.partial_cmp(b).unwrap());

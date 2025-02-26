@@ -523,7 +523,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use ndarray::{array, Array, Array1, IxDyn};
     use rand::{
-        distributions::{uniform::SampleUniform, Uniform},
+        distr::{uniform::SampleUniform, Uniform},
         rngs::StdRng,
         Rng, SeedableRng,
     };
@@ -533,7 +533,7 @@ mod tests {
     fn rand_arr<T: SampleUniform>(size: usize, range: (T, T), seed: u64) -> Array1<T> {
         Array::from_iter(
             StdRng::seed_from_u64(seed)
-                .sample_iter(Uniform::new_inclusive(range.0, range.1))
+                .sample_iter(Uniform::new_inclusive(range.0, range.1).unwrap())
                 .take(size),
         )
     }

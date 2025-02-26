@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ndarray::{Array, Array1};
 use ndarray_interp::vector_extensions::VectorExtensions;
-use rand::{distributions::Uniform, prelude::*};
+use rand::{distr::Uniform, prelude::*};
 use rand_extensions::RandArray;
 
 mod rand_extensions;
@@ -24,7 +24,7 @@ fn bunched_linspace() -> Array1<f64> {
     let mut arr: Vec<f64> =
         Vec::from_iter(Array::linspace(0.0, 1.0, 20).into_iter().flat_map(|x| {
             rng(42)
-                .sample_iter(Uniform::new_inclusive(-0.001, 0.001))
+                .sample_iter(Uniform::new_inclusive(-0.001, 0.001).unwrap())
                 .take(5)
                 .map(move |noise| x + noise)
         }));
@@ -42,7 +42,7 @@ fn noisy_linspace() -> Array1<f64> {
 fn bench_get_lower_index(c: &mut Criterion) {
     let query = Array::from_iter(
         rng(69)
-            .sample_iter(Uniform::new_inclusive(-0.1, 1.1))
+            .sample_iter(Uniform::new_inclusive(-0.1, 1.1).unwrap())
             .take(1000),
     );
 
@@ -69,7 +69,7 @@ fn bench_get_lower_index(c: &mut Criterion) {
     let arr = Array::logspace(2.0, 0.0, 8.0, 100);
     let query = Array::from_iter(
         rng(69)
-            .sample_iter(Uniform::new_inclusive(0.95, 256.5))
+            .sample_iter(Uniform::new_inclusive(0.95, 256.5).unwrap())
             .take(1000),
     );
     c.bench_function("Logspaced", |b| {
