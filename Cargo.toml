@@ -1,6 +1,6 @@
 [package]
 name = "ndarray-interp"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 description = "Interpolation package for ndarray"
@@ -17,9 +17,8 @@ num-traits = "0.2"
 thiserror = "2.0"
 
 [dev-dependencies]
-cargo-tarpaulin = "0.33"
 ndarray = {version = "0.17", features = ["approx", "rayon"] }
-approx = "0.5" 
+approx = "0.5"
 criterion = "0.8.1"
 rand = "0.9"
 
